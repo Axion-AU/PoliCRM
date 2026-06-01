@@ -1,22 +1,27 @@
 import "./index.css";
 import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { ProtectedRoute } from "./components/ProtectedRoute";
-
-import { Layout } from "./components/Layout";
+import { ErrorBoundary } from "@shared/components/ErrorBoundary";
+import { ProtectedRoute } from "@modules/Auth";
+import { Layout } from "@modules/AppShell";
 
 const LandingPage = lazy(() =>
-  import("./components/LandingPage").then((module) => ({
+  import("@modules/Landing").then((module) => ({
     default: module.LandingPage,
   })),
 );
 const WarRoom = lazy(() =>
-  import("./pages/WarRoom").then((module) => ({ default: module.WarRoom })),
+  import("@modules/WarRoom").then((module) => ({ default: module.WarRoomPage })),
 );
-const Login = lazy(() => import("./pages/Login"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Queue = lazy(() => import("./pages/Queue"));
+const Login = lazy(() =>
+  import("@modules/Auth").then((module) => ({ default: module.LoginPage })),
+);
+const Dashboard = lazy(() =>
+  import("@modules/Dashboard").then((module) => ({ default: module.DashboardPage })),
+);
+const Queue = lazy(() =>
+  import("@modules/Queue").then((module) => ({ default: module.QueuePage })),
+);
 
 function App() {
   return (
