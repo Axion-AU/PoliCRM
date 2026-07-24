@@ -52,6 +52,10 @@ app.all("/*", async (c) => {
   const headers = new Headers(c.req.raw.headers);
   headers.delete("host");
 
+  // Strip any forged identity headers before setting fresh ones below
+  for (const h of ["x-user-id","x-user-email","x-user-name","x-user-role","x-user-branch-id"]) {
+    headers.delete(h);
+  }
   if (user) {
     headers.set("X-User-Id", user.id);
     headers.set("X-User-Email", user.email);

@@ -13,11 +13,18 @@ mod outreach;
 mod automations;
 
 use axum::{
+    body::Body,
+    extract::{FromRequestParts, State},
+    http::{Request, StatusCode},
+    middleware::{self, Next},
+    response::Response,
     routing::get,
     Router,
 };
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::net::SocketAddr;
+
+use crate::auth::CurrentUser;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,24 +69,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         era::service::sync_era_files(&pool_for_sync, &era_dir).await;
     });
 
-    let app = Router::new()
-        .route("/health", get(health_check))
+    // Data routes (require authentication)
+    let data_routes = Router::new()
         .merge(api::router())
         .merge(tasks::router())
         .merge(fundraising::router())
         .merge(outreach::router())
         .merge(automations::router())
         .merge(public_pages::router())
-        .merge(auth_routes::router())
         .nest("/branches", branches::router())
         .nest("/era", era::handlers::router())
+        .layer(middleware::from_fn_with_state(pool.clone(), require_auth));
+
+    let app = Router::new()
+        .route("/health", get(health_check))
+        .merge(auth_routes::router())
+        .merge(data_routes)
         .with_state(pool);
 
     // Run it with fallback to alternative ports if occupied
     let mut port = 8080;
     let max_port = 8100;
     let listener = loop {
-        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        let addr = SocketAddr::from(([0, 0, 0, 0], port));
         match tokio::net::TcpListener::bind(addr).await {
             Ok(listener) => {
                 println!("Listening on {}", addr);
@@ -100,4 +112,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn health_check() -> &'static str {
     "OK"
+}
+
+async fn require_auth(
+    State(pool): State<SqlitePool>,
+    req: Request<Body>,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let path = req.uri().path();
+    if path == "/health" || path.starts_with("/auth/") {
+        return Ok(next.run(req).await);
+    }
+
+    let (mut parts, body) = req.into_parts();
+    CurrentUser::from_request_parts(&mut parts, &pool).await?;
+    let req = Request::from_parts(parts, body);
+    Ok(next.run(req).await)
 }

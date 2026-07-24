@@ -85,13 +85,18 @@ pub fn decrypt_opt(value: Option<&str>) -> Result<Option<String>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Global mutex to serialize tests that mutate ENCRYPTION_KEY (parallel test runners
+    /// share a process-global environment, so concurrent mutations race).
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     /// Sets the ENCRYPTION_KEY env var for the duration of the closure, then restores the
-    /// previous value. This is necessary because tests share a process-global environment.
+    /// previous value. The global ENV_LOCK ensures only one such mutation is in-flight at
+    /// any time, preventing races between parallel tests.
     fn with_key<T>(key: &str, f: impl FnOnce() -> T) -> T {
-        // Safety: single-threaded test setup; env mutations are guarded by the test harness.
+        let _guard = ENV_LOCK.lock().unwrap();
         let previous = std::env::var("ENCRYPTION_KEY").ok();
-        // SAFETY: only mutates env in a controlled test context.
         unsafe { std::env::set_var("ENCRYPTION_KEY", key) };
         let result = f();
         match previous {
@@ -201,7 +206,7 @@ mod tests {
 
     #[test]
     fn decrypt_fails_when_key_missing() {
-        // Remove the key from the environment entirely.
+        let _guard = ENV_LOCK.lock().unwrap();
         let previous = std::env::var("ENCRYPTION_KEY").ok();
         unsafe { std::env::remove_var("ENCRYPTION_KEY") };
         let result = decrypt("anyvalue");
@@ -214,6 +219,7 @@ mod tests {
 
     #[test]
     fn encrypt_fails_when_key_missing() {
+        let _guard = ENV_LOCK.lock().unwrap();
         let previous = std::env::var("ENCRYPTION_KEY").ok();
         unsafe { std::env::remove_var("ENCRYPTION_KEY") };
         let result = encrypt("any plaintext");

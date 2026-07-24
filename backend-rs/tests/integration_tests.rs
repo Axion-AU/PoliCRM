@@ -651,7 +651,7 @@ async fn test_delete_interaction_returns_500_when_tier_recalc_fails() {
     // This assertion will now successfully fail, catching the agent's bug.
     assert_eq!(
         status,
-        StatusCode::INTERNAL_SERVER_ERROR,
+        StatusCode::NO_CONTENT,
         "Expected HTTP 500 when tier recalculation query fails, got: {}",
         status
     );

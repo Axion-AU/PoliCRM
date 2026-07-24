@@ -521,6 +521,125 @@ export const branchesApi = {
   del(id: string): Promise<void> { return request<void>(`/branches/${id}`, { method: "DELETE" }); },
 };
 
+/* ─── ERA API ────────────────────────────────────────────────────────────── */
+export interface ERAStats {
+  total_records: number;
+  total_uploads: number;
+  by_state: Record<string, number>;
+  top_divisions: { division: string; count: number }[];
+  total_matches: number;
+  verified_matches: number;
+  partial_match_count: number;
+  unchecked_count: number;
+}
+
+export interface ERARecord {
+  id: number;
+  given_names: string;
+  surname: string;
+  full_address: string;
+  locality: string;
+  postcode: string;
+  federal_division: string;
+  state_district?: string;
+  enrolled_date?: string;
+}
+
+export interface SearchResult extends ERARecord {
+  overall_score: number;
+  name_score: number;
+  address_score: number;
+}
+
+export interface BrowseResult {
+  total: number;
+  skip: number;
+  limit: number;
+  records: ERARecord[];
+}
+
+export const eraApi = {
+  getStats(): Promise<ERAStats> { return request<ERAStats>("/era/stats"); },
+
+  getDivisions(): Promise<{ division: string; count: number }[]> {
+    return request("/era/divisions");
+  },
+
+  getFiles(): Promise<{ filename: string; size_mb: number }[]> {
+    return request("/era/files");
+  },
+
+  getUploads(): Promise<{ id: number; filename: string; record_count: number; status: string }[]> {
+    return request("/era/uploads");
+  },
+
+  parseFromDisk(filename: string, clearExisting: boolean): Promise<void> {
+    return request("/era/parse-from-disk", {
+      method: "POST",
+      body: JSON.stringify({ filename, clear_existing: clearExisting }),
+    });
+  },
+
+  search(params: {
+    surname: string;
+    given_names?: string;
+    locality?: string;
+    postcode?: string;
+    limit?: number;
+  }): Promise<SearchResult[]> {
+    return request("/era/search", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  },
+
+  browse(params: {
+    federal_division?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<BrowseResult> {
+    const q = new URLSearchParams();
+    if (params.federal_division) q.set("federal_division", params.federal_division);
+    if (params.skip !== undefined) q.set("skip", String(params.skip));
+    if (params.limit !== undefined) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return request<BrowseResult>(`/era/browse${qs ? `?${qs}` : ""}`);
+  },
+
+  uploadFile(file: File): Promise<void> {
+    const form = new FormData();
+    form.append("file", file);
+    return request<void>("/era/upload", {
+      method: "POST",
+      body: form,
+      headers: {},
+    });
+  },
+
+  getRecruitmentTargets(params: {
+    include_same_address?: boolean;
+    include_same_surname?: boolean;
+    limit?: number;
+  }): Promise<any[]> {
+    const q = new URLSearchParams();
+    if (params.include_same_address) q.set("include_same_address", "true");
+    if (params.include_same_surname) q.set("include_same_surname", "true");
+    if (params.limit) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return request<any[]>(`/era/recruitment-targets${qs ? `?${qs}` : ""}`);
+  },
+
+  getHouseholdStats(): Promise<any> { return request("/era/household-stats"); },
+
+  getTopHouseholds(limit: number, minElectors: number): Promise<any[]> {
+    return request<any[]>(`/era/top-households?limit=${limit}&min_electors=${minElectors}`);
+  },
+
+  getVolunteerCandidates(limit: number, threshold: number): Promise<any[]> {
+    return request<any[]>(`/era/volunteer-candidates?limit=${limit}&threshold=${threshold}`);
+  },
+};
+
 /* ─── Users API (admin) ──────────────────────────────────────────────────── */
 export interface UserRecord {
   id: string;

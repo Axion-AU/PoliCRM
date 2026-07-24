@@ -33,7 +33,7 @@ pub struct AdminUser(pub CurrentUser);
 fn jwt_secret() -> String {
     std::env::var("JWT_SECRET")
         .or_else(|_| std::env::var("SECRET_KEY"))
-        .unwrap_or_else(|_| "change-me-in-production".to_string())
+        .expect("JWT_SECRET or SECRET_KEY must be set in environment")
 }
 
 pub fn create_token(user: &CurrentUser) -> Result<String, String> {

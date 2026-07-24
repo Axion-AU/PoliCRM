@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, patch, post},
     Json, Router,
@@ -210,10 +210,6 @@ async fn register(
     .bind(&payload.name)
     .bind(&password_hash)
     .bind(role)
-    .bind(id)
-    .bind(&payload.email)
-    .bind(&payload.name)
-    .bind(&password_hash)
     .execute(&pool)
     .await
     .map_err(|e| {
@@ -254,11 +250,24 @@ async fn register(
     }))
 }
 
-/// Seed an initial admin user (idempotent — safe to call on every deploy)
+/// Seed an initial admin user (requires SEED_TOKEN env var + X-Seed-Token header)
 async fn seed_admin(
     State(pool): State<SqlitePool>,
+    headers: HeaderMap,
     Json(payload): Json<RegisterPayload>,
 ) -> Result<Json<AuthResponse>, StatusCode> {
+    let seed_token = std::env::var("SEED_TOKEN").map_err(|_| {
+        eprintln!("SEED_TOKEN not set in environment — /auth/seed is disabled");
+        StatusCode::FORBIDDEN
+    })?;
+    let provided = headers
+        .get("x-seed-token")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if provided != seed_token {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     let email = payload.email.trim().to_lowercase();
     if email.is_empty() || payload.password.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
