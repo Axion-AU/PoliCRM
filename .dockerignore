@@ -1,0 +1,54 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.venv/
+.agents/
+.impeccable/
+.vite/
+.vscode/
+node_modules/
+.cache/
+.git/
+.github/
+.hypothesis/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.coverage
+htmlcov/
+
+# SQLite databases (generated at runtime)
+crm.db
+crm.db-journal
+backend-rs/crm.db
+backend-rs/crm.db-journal
+policrm_addresses.db
+
+# CSV data files (not needed at build time)
+*.csv
+
+# Secrets
+policrm-5f60f-firebase-adminsdk-fbsvc-c4a252e080.json
+
+# Build artifacts - we rebuild inside Docker
+dist/
+build/
+target/
+*.egg-info/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# documentation (not needed at runtime)
+*.md
+!README.md
+docs/
+
+# ERA files (mounted at runtime)
+era/
+
+# GNAF data (mounted at runtime)
+gnaf_incoming*

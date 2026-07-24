@@ -1,0 +1,36 @@
+# ============================================================
+# Stage 1: Rust builder
+# ============================================================
+FROM rust:1.85-slim-bookworm AS rust-builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY backend-rs/ .
+
+# Build with release profile for small binary
+RUN cargo build --release
+
+# ============================================================
+# Stage 2: Minimal runtime image
+# ============================================================
+FROM debian:bookworm-slim AS backend-rs
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=rust-builder /build/target/release/backend-rs /app/backend-rs
+COPY backend-rs/migrations/ ./migrations/
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["/app/backend-rs"]
