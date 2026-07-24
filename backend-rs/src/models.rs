@@ -23,6 +23,7 @@ pub struct Person {
     pub primary_state: String,           // NOT encrypted — used for geo filtering
     pub primary_zip: String,             // NOT encrypted — low sensitivity, used for filtering
     pub primary_country_code: String,
+    pub engagement_tier: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,

@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post, patch, delete},
+    routing::{delete, get, patch, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -35,6 +35,7 @@ pub struct PersonResponse {
     pub primary_state: String,
     pub primary_zip: String,
     pub primary_country_code: String,
+    pub engagement_tier: String,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
@@ -60,6 +61,7 @@ fn decrypt_person(p: Person) -> Result<PersonResponse, String> {
         primary_state: p.primary_state,
         primary_zip: p.primary_zip,
         primary_country_code: p.primary_country_code,
+        engagement_tier: p.engagement_tier,
         created_at: p.created_at.to_rfc3339(),
         updated_at: p.updated_at.to_rfc3339(),
         deleted_at: p.deleted_at.map(|d| d.to_rfc3339()),
@@ -110,6 +112,8 @@ pub fn router() -> Router<SqlitePool> {
     Router::new()
         .route("/persons", post(create_person).get(list_persons))
         .route("/persons/{id}", get(get_person).patch(update_person).delete(delete_person))
+        .route("/persons/{id}/interactions", post(create_interaction).get(list_interactions))
+        .route("/persons/{person_id}/interactions/{interaction_id}", delete(delete_interaction))
         .route("/import/nationbuilder", post(import_nationbuilder))
         .route("/analytics/summary", get(get_analytics_summary))
         .route("/analytics/growth", get(get_analytics_growth))
@@ -1064,4 +1068,138 @@ async fn get_stats_electorates(
         .collect();
 
     Ok(Json(stats))
+}
+
+#[derive(Deserialize)]
+pub struct CreateInteractionPayload {
+    pub interaction_type: String,
+    pub metadata: Option<serde_json::Value>,
+    pub timestamp: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct InteractionResponse {
+    pub id: String,
+    pub person_id: String,
+    pub interaction_type: String,
+    pub metadata: Option<serde_json::Value>,
+    pub timestamp: String,
+    pub user_id: Option<String>,
+}
+
+async fn create_interaction(
+    State(pool): State<SqlitePool>,
+    Path(person_id): Path<Uuid>,
+    Json(payload): Json<CreateInteractionPayload>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let valid_types = ["Email", "Phone", "In Person", "SMS", "donation", "volunteer_shift", "event_rsvp", "aec_check", "canvass"];
+    if !valid_types.contains(&payload.interaction_type.as_str()) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let timestamp = if let Some(ts_str) = payload.timestamp {
+        chrono::DateTime::parse_from_rfc3339(&ts_str)
+            .map_err(|_| StatusCode::BAD_REQUEST)?
+            .with_timezone(&chrono::Utc)
+    } else {
+        chrono::Utc::now()
+    };
+
+    if timestamp > chrono::Utc::now() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let person_exists = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM persons WHERE id = ?1 AND deleted_at IS NULL"
+    )
+    .bind(person_id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    if person_exists == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let interaction_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO interactions (id, person_id, interaction_type, metadata, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)"
+    )
+    .bind(interaction_id)
+    .bind(person_id)
+    .bind(&payload.interaction_type)
+    .bind(&payload.metadata)
+    .bind(timestamp)
+    .execute(&pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    if let Err(e) = crate::engagement::recalculate_engagement_tier(&pool, person_id).await {
+        eprintln!("Failed to recalculate engagement tier: {}", e);
+    }
+
+    Ok((StatusCode::CREATED, Json(serde_json::json!({"id": interaction_id}))))
+}
+
+async fn list_interactions(
+    State(pool): State<SqlitePool>,
+    Path(person_id): Path<Uuid>,
+) -> Result<Json<Vec<InteractionResponse>>, StatusCode> {
+    let interactions = sqlx::query_as::<_, crate::models::Interaction>(
+        "SELECT * FROM interactions WHERE person_id = ?1 ORDER BY timestamp DESC"
+    )
+    .bind(person_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let responses: Vec<InteractionResponse> = interactions
+        .into_iter()
+        .map(|i| InteractionResponse {
+            id: i.id.to_string(),
+            person_id: i.person_id.to_string(),
+            interaction_type: i.interaction_type,
+            metadata: i.metadata,
+            timestamp: i.timestamp.to_rfc3339(),
+            user_id: i.user_id.map(|u| u.to_string()),
+        })
+        .collect();
+
+    Ok(Json(responses))
+}
+
+async fn delete_interaction(
+    State(pool): State<SqlitePool>,
+    Path((person_id, interaction_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, StatusCode> {
+    let result = sqlx::query(
+        "DELETE FROM interactions WHERE id = ?1 AND person_id = ?2"
+    )
+    .bind(interaction_id)
+    .bind(person_id)
+    .execute(&pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    if result.rows_affected() == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    if let Err(e) = crate::engagement::recalculate_engagement_tier(&pool, person_id).await {
+        eprintln!("Failed to recalculate engagement tier: {}", e);
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }

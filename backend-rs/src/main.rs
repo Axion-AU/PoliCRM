@@ -1,7 +1,8 @@
-mod models;
-mod api;
+pub mod models;
+pub mod api;
 mod crypto;
 mod era;
+pub mod engagement;
 
 use axum::{
     routing::get,

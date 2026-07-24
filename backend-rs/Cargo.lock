@@ -187,6 +187,7 @@ dependencies = [
  "sqlx",
  "strsim",
  "tokio",
+ "tower",
  "uuid",
  "zip",
 ]
