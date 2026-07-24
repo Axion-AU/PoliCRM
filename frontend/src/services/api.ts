@@ -226,3 +226,319 @@ export const statsApi = {
     return request<ElectorateStat[]>("/stats/electorates");
   },
 };
+
+/* ─── Tasks API ──────────────────────────────────────────────────────────── */
+export interface Task {
+  id: string;
+  person_id?: string;
+  assigned_to?: string;
+  assigned_by?: string;
+  title: string;
+  description?: string;
+  status: "pending" | "completed" | "cancelled";
+  due_date?: string;
+  completed_at?: string;
+  completed_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const tasksApi = {
+  list(params?: { assigned_to?: string; status?: string; person_id?: string }): Promise<Task[]> {
+    const q = new URLSearchParams();
+    if (params?.assigned_to) q.set("assigned_to", params.assigned_to);
+    if (params?.status) q.set("status", params.status);
+    if (params?.person_id) q.set("person_id", params.person_id);
+    const qs = q.toString();
+    return request<Task[]>(`/tasks${qs ? `?${qs}` : ""}`);
+  },
+  today(): Promise<Task[]> { return request<Task[]>("/tasks/today"); },
+  overdue(): Promise<Task[]> { return request<Task[]>("/tasks/overdue"); },
+  get(id: string): Promise<Task> { return request<Task>(`/tasks/${id}`); },
+  create(data: { title: string; description?: string; assigned_to?: string; person_id?: string; due_date?: string }): Promise<Task> {
+    return request<Task>("/tasks", { method: "POST", body: JSON.stringify(data) });
+  },
+  update(id: string, data: Partial<Task>): Promise<void> {
+    return request<void>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  },
+  complete(id: string): Promise<void> { return request<void>(`/tasks/${id}/complete`, { method: "POST" }); },
+  cancel(id: string): Promise<void> { return request<void>(`/tasks/${id}/cancel`, { method: "POST" }); },
+  delete(id: string): Promise<void> { return request<void>(`/tasks/${id}`, { method: "DELETE" }); },
+};
+
+/* ─── Memberships API ────────────────────────────────────────────────────── */
+export interface MembershipTier {
+  id: string;
+  name: string;
+  description?: string;
+  price_cents: number;
+  billing_period: string;
+  benefits?: string[];
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface Membership {
+  id: string;
+  person_id: string;
+  party_id: string;
+  tier_id?: string;
+  status: string;
+  membership_type?: string;
+  join_date?: string;
+  renewal_date?: string;
+  auto_renew: boolean;
+}
+
+export const membershipsApi = {
+  tiers: {
+    list(): Promise<MembershipTier[]> { return request<MembershipTier[]>("/membership-tiers"); },
+    create(data: Partial<MembershipTier>): Promise<MembershipTier> { return request<MembershipTier>("/membership-tiers", { method: "POST", body: JSON.stringify(data) }); },
+    update(id: string, data: Partial<MembershipTier>): Promise<void> { return request<void>(`/membership-tiers/${id}`, { method: "PATCH", body: JSON.stringify(data) }); },
+  },
+  list(params?: { status?: string; person_id?: string }): Promise<Membership[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.person_id) q.set("person_id", params.person_id);
+    return request<Membership[]>(`/memberships?${q}`);
+  },
+  create(data: { person_id: string; party_id: string; tier_id?: string; status?: string }): Promise<Membership> {
+    return request<Membership>("/memberships", { method: "POST", body: JSON.stringify(data) });
+  },
+  renew(id: string): Promise<void> { return request<void>(`/memberships/${id}/renew`, { method: "POST" }); },
+  get(id: string): Promise<Membership & { person_name?: string; tier_name?: string }> { return request(`/memberships/${id}`); },
+};
+
+/* ─── Donations API ──────────────────────────────────────────────────────── */
+export interface Donation {
+  id: string;
+  person_id: string;
+  amount_cents: number;
+  currency: string;
+  donation_type: string;
+  status: string;
+  campaign?: string;
+  donated_at: string;
+}
+
+export interface DonationStats {
+  total_7d: number;
+  total_30d: number;
+  total_all: number;
+  avg_gift: number;
+  monthly_recurring: number;
+  by_campaign: Record<string, number>;
+}
+
+export const donationsApi = {
+  list(params?: { person_id?: string; campaign?: string }): Promise<Donation[]> {
+    const q = new URLSearchParams();
+    if (params?.person_id) q.set("person_id", params.person_id);
+    if (params?.campaign) q.set("campaign", params.campaign);
+    return request<Donation[]>(`/donations?${q}`);
+  },
+  stats(): Promise<DonationStats> { return request<DonationStats>("/donations/stats"); },
+  create(data: { person_id: string; amount_cents: number; campaign?: string; donation_type?: string }): Promise<Donation> {
+    return request<Donation>("/donations", { method: "POST", body: JSON.stringify(data) });
+  },
+};
+
+/* ─── Events API ─────────────────────────────────────────────────────────── */
+export interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  event_type: string;
+  location?: string;
+  capacity?: number;
+  ticket_price_cents?: number;
+  start_at: string;
+  end_at?: string;
+  status: string;
+}
+
+export interface EventRsvp {
+  id: string;
+  event_id: string;
+  person_id: string;
+  status: string;
+  checked_in_at?: string;
+}
+
+export const eventsApi = {
+  list(params?: { status?: string; upcoming?: boolean }): Promise<Event[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.upcoming) q.set("upcoming", "true");
+    return request<Event[]>(`/events?${q}`);
+  },
+  get(id: string): Promise<Event> { return request<Event>(`/events/${id}`); },
+  create(data: Partial<Event>): Promise<Event> { return request<Event>("/events", { method: "POST", body: JSON.stringify(data) }); },
+  update(id: string, data: Partial<Event>): Promise<void> { return request<void>(`/events/${id}`, { method: "PATCH", body: JSON.stringify(data) }); },
+  publish(id: string): Promise<void> { return request<void>(`/events/${id}/publish`, { method: "POST" }); },
+  cancel(id: string): Promise<void> { return request<void>(`/events/${id}/cancel`, { method: "POST" }); },
+  rsvp(event_id: string, person_id: string): Promise<EventRsvp> {
+    return request<EventRsvp>(`/events/${event_id}/rsvp`, { method: "POST", body: JSON.stringify({ person_id }) });
+  },
+  checkIn(event_id: string, person_id: string): Promise<void> {
+    return request<void>(`/events/${event_id}/check-in`, { method: "POST", body: JSON.stringify({ person_id }) });
+  },
+  attendees(event_id: string): Promise<Array<EventRsvp & { person_name?: string }>> {
+    return request(`/events/${event_id}/attendees`);
+  },
+};
+
+/* ─── Email Campaigns API ────────────────────────────────────────────────── */
+export interface EmailCampaign {
+  id: string;
+  title: string;
+  subject: string;
+  body_html: string;
+  status: string;
+  scheduled_at?: string;
+  sent_at?: string;
+  created_at: string;
+}
+
+export interface CampaignStats {
+  sent: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  pending: number;
+}
+
+export const emailApi = {
+  list(): Promise<EmailCampaign[]> { return request<EmailCampaign[]>("/email-campaigns"); },
+  get(id: string): Promise<EmailCampaign> { return request<EmailCampaign>(`/email-campaigns/${id}`); },
+  create(data: { title: string; subject: string; body_html: string }): Promise<EmailCampaign> {
+    return request<EmailCampaign>("/email-campaigns", { method: "POST", body: JSON.stringify(data) });
+  },
+  update(id: string, data: Partial<EmailCampaign>): Promise<void> {
+    return request<void>(`/email-campaigns/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  },
+  send(id: string): Promise<void> { return request<void>(`/email-campaigns/${id}/send`, { method: "POST" }); },
+  stats(id: string): Promise<CampaignStats> { return request<CampaignStats>(`/email-campaigns/${id}/stats`); },
+  addRecipients(id: string, person_ids: string[]): Promise<void> {
+    return request<void>(`/email-campaigns/${id}/recipients`, { method: "POST", body: JSON.stringify({ person_ids }) });
+  },
+};
+
+/* ─── SMS API ────────────────────────────────────────────────────────────── */
+export interface SmsMessage {
+  id: string;
+  person_id?: string;
+  phone_number: string;
+  body: string;
+  status: string;
+  sent_at?: string;
+}
+
+export const smsApi = {
+  send(data: { person_id: string; body: string }): Promise<SmsMessage> {
+    return request<SmsMessage>("/sms/send", { method: "POST", body: JSON.stringify(data) });
+  },
+  broadcast(data: { person_ids: string[]; body: string }): Promise<{ sent: number }> {
+    return request("/sms/broadcast", { method: "POST", body: JSON.stringify(data) });
+  },
+  messages(): Promise<SmsMessage[]> { return request<SmsMessage[]>("/sms/messages"); },
+  stats(): Promise<{ total_sent: number; delivery_rate: number }> { return request("/sms/stats"); },
+};
+
+/* ─── Prospects API ──────────────────────────────────────────────────────── */
+export interface Prospect {
+  person_id: string;
+  score: number;
+  tier: string;
+  reason?: string;
+  suggested_ask_cents?: number;
+  last_calculated: string;
+}
+
+export const prospectsApi = {
+  list(): Promise<Prospect[]> { return request<Prospect[]>("/prospects"); },
+  recalculate(): Promise<void> { return request<void>("/prospects/recalculate", { method: "POST" }); },
+  logOutcome(id: string, data: { outcome: string; pledged_cents?: number; notes?: string }): Promise<void> {
+    return request<void>(`/prospects/${id}/log-outcome`, { method: "POST", body: JSON.stringify(data) });
+  },
+};
+
+/* ─── Automations API ────────────────────────────────────────────────────── */
+export interface Automation {
+  id: string;
+  name: string;
+  description?: string;
+  trigger_type: string;
+  trigger_config: string;
+  actions: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const automationsApi = {
+  list(): Promise<Automation[]> { return request<Automation[]>("/automations"); },
+  create(data: { name: string; trigger_type: string; trigger_config: string; actions: string }): Promise<Automation> {
+    return request<Automation>("/automations", { method: "POST", body: JSON.stringify(data) });
+  },
+  update(id: string, data: Partial<Automation>): Promise<void> { return request<void>(`/automations/${id}`, { method: "PATCH", body: JSON.stringify(data) }); },
+  activate(id: string): Promise<void> { return request<void>(`/automations/${id}/activate`, { method: "POST" }); },
+  deactivate(id: string): Promise<void> { return request<void>(`/automations/${id}/deactivate`, { method: "POST" }); },
+  delete(id: string): Promise<void> { return request<void>(`/automations/${id}`, { method: "DELETE" }); },
+};
+
+/* ─── Activity API ───────────────────────────────────────────────────────── */
+export interface ActivityEntry {
+  id: string;
+  user_id?: string;
+  person_id?: string;
+  action: string;
+  description?: string;
+  created_at: string;
+}
+
+export const activityApi = {
+  list(): Promise<ActivityEntry[]> { return request<ActivityEntry[]>("/activity"); },
+  stats(): Promise<{ tasks_completed_today: number; contacts_made_this_week: number; new_people_this_week: number }> {
+    return request("/activity/stats");
+  },
+};
+
+/* ─── Branches API ───────────────────────────────────────────────────────── */
+export interface Branch {
+  id: string;
+  name: string;
+  type: string;
+  parent_id?: string;
+  created_at: string;
+}
+
+export const branchesApi = {
+  list(): Promise<Branch[]> { return request<Branch[]>("/branches"); },
+  create(data: { name: string; type: string; parent_id?: string }): Promise<Branch> {
+    return request<Branch>("/branches", { method: "POST", body: JSON.stringify(data) });
+  },
+  update(id: string, data: Partial<Branch>): Promise<void> { return request<void>(`/branches/${id}`, { method: "PATCH", body: JSON.stringify(data) }); },
+  del(id: string): Promise<void> { return request<void>(`/branches/${id}`, { method: "DELETE" }); },
+};
+
+/* ─── Users API (admin) ──────────────────────────────────────────────────── */
+export interface UserRecord {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  branch_id?: string;
+  branch_name?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const usersApi = {
+  list(): Promise<UserRecord[]> { return request<UserRecord[]>("/users"); },
+  create(data: { email: string; name: string; role?: string; branch_id?: string }): Promise<UserRecord> {
+    return request<UserRecord>("/users", { method: "POST", body: JSON.stringify(data) });
+  },
+  update(id: string, data: { role?: string; is_active?: boolean }): Promise<void> {
+    return request<void>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  },
+};

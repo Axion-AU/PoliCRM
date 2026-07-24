@@ -6,17 +6,39 @@ import {
   Map,
   Settings,
   LogOut,
+  Calendar,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
 /* ─── Nav items ──────────────────────────────────────────────────────────── */
-const NAV_ITEMS = [
-  { to: "/app/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/app/members",   icon: Users,           label: "Members"   },
-  { to: "/app/import",    icon: Upload,          label: "Import"    },
-  { to: "/app/war-room",  icon: Map,             label: "War Room"  },
-  { to: "/app/settings",  icon: Settings,        label: "Settings"  },
-] as const;
+type NavSection = { section: string; items: readonly { to: string; icon: React.ElementType; label: string }[] };
+
+const NAV_SECTIONS: NavSection[] = [
+  { section: "Core", items: [
+    { to: "/app/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    { to: "/app/members",   icon: Users,           label: "Members"   },
+    { to: "/app/import",    icon: Upload,          label: "Import"    },
+  ]},
+  { section: "Operations", items: [
+    { to: "/app/tasks",        icon: ListChecks,    label: "Tasks"        },
+    { to: "/app/memberships",  icon: CreditCard,    label: "Memberships"  },
+    { to: "/app/fundraising",  icon: DollarSign,    label: "Fundraising"  },
+    { to: "/app/events",       icon: Calendar,      label: "Events"       },
+  ]},
+  { section: "Outreach", items: [
+    { to: "/app/campaigns",  icon: Mail,          label: "Campaigns" },
+    { to: "/app/sms",        icon: MessageSquare, label: "SMS"       },
+    { to: "/app/prospects",  icon: TrendingUp,    label: "Prospects" },
+  ]},
+  { section: "Automations", items: [
+    { to: "/app/automations", icon: Zap, label: "Automations" },
+  ]},
+  { section: "Admin", items: [
+    { to: "/app/admin/users",    icon: Shield, label: "Admin"    },
+    { to: "/app/war-room",  icon: Map,    label: "War Room" },
+    { to: "/app/settings",  icon: Settings, label: "Settings" },
+  ]},
+];
 
 /* ─── Role labels ────────────────────────────────────────────────────────── */
 const ROLE_LABELS: Record<string, string> = {
@@ -38,7 +60,6 @@ export function Sidebar() {
       navigate("/login");
     } catch (err) {
       console.error("Logout failed:", err);
-      // Stay on current page; user can retry
     }
   };
 
@@ -69,7 +90,6 @@ export function Sidebar() {
             alt="PoliCRM Logo"
             style={{ width: 24, height: 24, objectFit: "contain" }}
           />
-          {/* Wordmark: IBM Plex Mono Medium, uppercase, tracked 0.08em — brand spec */}
           <span
             style={{
               fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
@@ -99,32 +119,41 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav style={{ flex: 1, padding: "12px 12px 0" }}>
-        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-          {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
-            <li key={to}>
-              <NavLink
-                to={to}
-                className={({ isActive }) =>
-                  `nav-item${isActive ? " active" : ""}`
-                }
-                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}
-              >
-                <Icon size={16} strokeWidth={2} style={{ flexShrink: 0 }} />
-                <span style={{ flex: 1 }}>{label}</span>
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-
-        {/* Section divider */}
-        <div
-          style={{
-            margin: "16px 0 12px",
-            height: 1,
-            background: "var(--navy-border)",
-          }}
-        />
+      <nav style={{ flex: 1, padding: "12px 12px 0", overflowY: "auto" }}>
+        {NAV_SECTIONS.map(({ section, items }) => (
+          <div key={section}>
+            {/* Section label */}
+            <div
+              style={{
+                fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
+                fontSize: 10,
+                fontWeight: 500,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "#475569",
+                padding: "8px 12px 4px",
+              }}
+            >
+              {section}
+            </div>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+              {items.map(({ to, icon: Icon, label }) => (
+                <li key={to}>
+                  <NavLink
+                    to={to}
+                    className={({ isActive }) =>
+                      `nav-item${isActive ? " active" : ""}`
+                    }
+                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}
+                  >
+                    <Icon size={16} strokeWidth={2} style={{ flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>{label}</span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       {/* User row */}
@@ -152,7 +181,6 @@ export function Sidebar() {
           title="Sign out"
           aria-label="Sign out"
         >
-          {/* Avatar initial — Civic Teal tones */}
           <div
             style={{
               width: 28,

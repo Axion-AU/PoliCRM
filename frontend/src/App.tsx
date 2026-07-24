@@ -18,6 +18,16 @@ const WarRoom = lazy(() =>
   import("./pages/WarRoom").then((m) => ({ default: m.WarRoom })),
 );
 const Settings = lazy(() => import("./pages/Settings"));
+const Tasks = lazy(() => import("./pages/Tasks"));
+const Memberships = lazy(() => import("./pages/Memberships"));
+const Fundraising = lazy(() => import("./pages/Fundraising"));
+const Events = lazy(() => import("./pages/Events"));
+const Campaigns = lazy(() => import("./pages/Campaigns"));
+const SmsPage = lazy(() => import("./pages/SmsPage"));
+const Prospects = lazy(() => import("./pages/Prospects"));
+const AutomationsPage = lazy(() => import("./pages/AutomationsPage"));
+const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const AdminBranches = lazy(() => import("./pages/AdminBranches"));
 
 /* ─── Loading fallback ───────────────────────────────────────────────────── */
 function PageLoader() {
@@ -67,6 +77,16 @@ function App() {
                 <Route path="import" element={<Import />} />
                 <Route path="war-room" element={<WarRoom />} />
                 <Route path="settings" element={<Settings />} />
+                <Route path="tasks" element={<Tasks />} />
+                <Route path="memberships" element={<Memberships />} />
+                <Route path="fundraising" element={<Fundraising />} />
+                <Route path="events" element={<Events />} />
+                <Route path="campaigns" element={<Campaigns />} />
+                <Route path="sms" element={<SmsPage />} />
+                <Route path="prospects" element={<Prospects />} />
+                <Route path="automations" element={<AutomationsPage />} />
+                <Route path="admin/users" element={<AdminUsers />} />
+                <Route path="admin/branches" element={<AdminBranches />} />
               </Route>
 
               {/* Catch-all */}
