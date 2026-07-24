@@ -3,6 +3,31 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
+/// Branch in the org hierarchy (national → state → branch → team).
+#[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
+pub struct Branch {
+    pub id: Uuid,
+    pub name: String,
+    pub r#type: String,
+    pub parent_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// User record synced from the auth worker headers.
+#[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
+pub struct User {
+    pub id: Uuid,
+    pub email: String,
+    pub name: String,
+    pub role: String,
+    pub branch_id: Option<Uuid>,
+    pub is_active: bool,
+    pub last_login_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Central person model. ALL PII fields are stored encrypted (AES-256-GCM, base64-encoded).
 /// `primary_state` and `primary_zip` are stored in plaintext for geo-filtering.
 /// `email_blind_index` is a deterministic SHA-256 HMAC used for exact-match email search.
@@ -24,6 +49,14 @@ pub struct Person {
     pub primary_zip: String,             // NOT encrypted — low sensitivity, used for filtering
     pub primary_country_code: String,
     pub engagement_tier: String,
+    pub tags: Option<String>,
+    pub custom_fields: Option<String>,
+    pub source: Option<String>,
+    pub source_url: Option<String>,
+    pub federal_division: Option<String>,
+    pub state_district: Option<String>,
+    pub lga: Option<String>,
+    pub last_contacted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,

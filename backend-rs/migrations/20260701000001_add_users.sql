@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'organiser',
+    branch_id TEXT REFERENCES branches(id),
+    is_active INTEGER NOT NULL DEFAULT 1,
+    last_login_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

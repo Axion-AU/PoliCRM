@@ -36,6 +36,14 @@ pub struct PersonResponse {
     pub primary_zip: String,
     pub primary_country_code: String,
     pub engagement_tier: String,
+    pub tags: Option<String>,
+    pub custom_fields: Option<String>,
+    pub source: Option<String>,
+    pub source_url: Option<String>,
+    pub federal_division: Option<String>,
+    pub state_district: Option<String>,
+    pub lga: Option<String>,
+    pub last_contacted_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
@@ -62,6 +70,14 @@ fn decrypt_person(p: Person) -> Result<PersonResponse, String> {
         primary_zip: p.primary_zip,
         primary_country_code: p.primary_country_code,
         engagement_tier: p.engagement_tier,
+        tags: p.tags,
+        custom_fields: p.custom_fields,
+        source: p.source,
+        source_url: p.source_url,
+        federal_division: p.federal_division,
+        state_district: p.state_district,
+        lga: p.lga,
+        last_contacted_at: p.last_contacted_at.map(|d| d.to_rfc3339()),
         created_at: p.created_at.to_rfc3339(),
         updated_at: p.updated_at.to_rfc3339(),
         deleted_at: p.deleted_at.map(|d| d.to_rfc3339()),
@@ -85,6 +101,14 @@ pub struct CreatePersonPayload {
     pub primary_state: String,
     pub primary_zip: String,
     pub primary_country_code: Option<String>,
+    pub tags: Option<String>,
+    pub custom_fields: Option<String>,
+    pub source: Option<String>,
+    pub source_url: Option<String>,
+    pub federal_division: Option<String>,
+    pub state_district: Option<String>,
+    pub lga: Option<String>,
+    pub last_contacted_at: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -104,6 +128,14 @@ pub struct UpdatePersonPayload {
     pub primary_state: Option<String>,
     pub primary_zip: Option<String>,
     pub primary_country_code: Option<String>,
+    pub tags: Option<Option<String>>,
+    pub custom_fields: Option<Option<String>>,
+    pub source: Option<Option<String>>,
+    pub source_url: Option<Option<String>>,
+    pub federal_division: Option<Option<String>>,
+    pub state_district: Option<Option<String>>,
+    pub lga: Option<Option<String>>,
+    pub last_contacted_at: Option<Option<String>>,
 }
 
 // ─── Router ──────────────────────────────────────────────────────────────────
@@ -165,12 +197,19 @@ async fn create_person(
     let enc_address3 = encrypt_opt(payload.primary_address3.as_deref()).map_err(|e| { eprintln!("Encryption error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let enc_city = encrypt(&payload.primary_city).map_err(|e| { eprintln!("Encryption error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
+    let last_contacted_at = payload.last_contacted_at.as_deref()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&chrono::Utc));
+
     let result = sqlx::query(
         r#"
         INSERT INTO persons (id, first_name, middle_name, last_name, email, email_blind_index,
                              phone, mobile, primary_address1, primary_address2, primary_address3,
-                             primary_city, primary_state, primary_zip, primary_country_code)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+                             primary_city, primary_state, primary_zip, primary_country_code,
+                             tags, custom_fields, source, source_url,
+                             federal_division, state_district, lga, last_contacted_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
+                ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
         "#,
     )
     .bind(id)
@@ -185,9 +224,17 @@ async fn create_person(
     .bind(enc_address2)
     .bind(enc_address3)
     .bind(enc_city)
-    .bind(&payload.primary_state)   // NOT encrypted — used for geo filtering
-    .bind(&payload.primary_zip)     // NOT encrypted — low sensitivity, used for filtering
+    .bind(&payload.primary_state)
+    .bind(&payload.primary_zip)
     .bind(&country_code)
+    .bind(&payload.tags)
+    .bind(&payload.custom_fields)
+    .bind(&payload.source)
+    .bind(&payload.source_url)
+    .bind(&payload.federal_division)
+    .bind(&payload.state_district)
+    .bind(&payload.lga)
+    .bind(last_contacted_at)
     .execute(&pool)
     .await;
 
@@ -481,6 +528,49 @@ async fn update_person(
         separated.push_bind_unseparated(country_code);
     }
 
+    if let Some(ref tags) = payload.tags {
+        separated.push("tags = ");
+        separated.push_bind_unseparated(tags);
+    }
+
+    if let Some(ref custom_fields) = payload.custom_fields {
+        separated.push("custom_fields = ");
+        separated.push_bind_unseparated(custom_fields);
+    }
+
+    if let Some(ref source) = payload.source {
+        separated.push("source = ");
+        separated.push_bind_unseparated(source);
+    }
+
+    if let Some(ref source_url) = payload.source_url {
+        separated.push("source_url = ");
+        separated.push_bind_unseparated(source_url);
+    }
+
+    if let Some(ref federal_division) = payload.federal_division {
+        separated.push("federal_division = ");
+        separated.push_bind_unseparated(federal_division);
+    }
+
+    if let Some(ref state_district) = payload.state_district {
+        separated.push("state_district = ");
+        separated.push_bind_unseparated(state_district);
+    }
+
+    if let Some(ref lga) = payload.lga {
+        separated.push("lga = ");
+        separated.push_bind_unseparated(lga);
+    }
+
+    if let Some(ref last_contacted_at_opt) = payload.last_contacted_at {
+        let parsed = last_contacted_at_opt.as_deref()
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|dt| dt.with_timezone(&chrono::Utc));
+        separated.push("last_contacted_at = ");
+        separated.push_bind_unseparated(parsed);
+    }
+
     separated.push("updated_at = ");
     separated.push_bind_unseparated(chrono::Utc::now());
 
@@ -668,8 +758,11 @@ async fn import_nationbuilder(
             r#"
             INSERT INTO persons (id, first_name, middle_name, last_name, email, email_blind_index,
                                  phone, mobile, primary_address1, primary_address2, primary_address3,
-                                 primary_city, primary_state, primary_zip, primary_country_code)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+                                 primary_city, primary_state, primary_zip, primary_country_code,
+                                 tags, custom_fields, source, source_url,
+                                 federal_division, state_district, lga)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
+                    ?16, ?17, ?18, ?19, ?20, ?21, ?22)
             "#
         )
         .bind(person_id)
@@ -687,6 +780,13 @@ async fn import_nationbuilder(
         .bind(primary_state)
         .bind(primary_zip)
         .bind(country_code)
+        .bind(Option::<String>::None)
+        .bind(Option::<String>::None)
+        .bind(Option::<String>::None)
+        .bind(Option::<String>::None)
+        .bind(Option::<String>::None)
+        .bind(Option::<String>::None)
+        .bind(Option::<String>::None)
         .execute(&mut *tx)
         .await;
 

@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "policrm-auth",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "kv_namespaces": [
+    {
+      "binding": "USERS_KV",
+      "id": "",
+      "preview_id": ""
+    },
+    {
+      "binding": "SESSIONS_KV",
+      "id": "",
+      "preview_id": ""
+    }
+  ],
+  "vars": {
+    "BACKEND_URL": "http://localhost:8000",
+    "JWT_ISSUER": "policrm-auth-worker",
+    "TOKEN_EXPIRY_SECONDS": "86400"
+  }
+}

@@ -1,8 +1,16 @@
 pub mod models;
 pub mod api;
+mod auth;
+mod auth_routes;
+mod branches;
 mod crypto;
 mod era;
 pub mod engagement;
+pub mod fundraising;
+pub mod tasks;
+mod public_pages;
+mod outreach;
+mod automations;
 
 use axum::{
     routing::get,
@@ -57,6 +65,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/health", get(health_check))
         .merge(api::router())
+        .merge(tasks::router())
+        .merge(fundraising::router())
+        .merge(outreach::router())
+        .merge(automations::router())
+        .merge(public_pages::router())
+        .merge(auth_routes::router())
+        .merge(branches::router())
         .nest("/era", era::handlers::router())
         .with_state(pool);
 
