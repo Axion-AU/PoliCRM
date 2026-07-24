@@ -139,6 +139,20 @@ export const personsApi = {
   },
 };
 
+export const membersApi = {
+  update(id: string, data: Record<string, unknown>): Promise<void> {
+    return request<void>(`/persons/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  resetStatus(id: string): Promise<void> {
+    return request<void>(`/persons/${encodeURIComponent(id)}/reset-status`, {
+      method: "POST",
+    });
+  },
+};
+
 /* ─── Import / Jobs API ──────────────────────────────────────────────────── */
 export const importApi = {
   list(): Promise<ImportJob[]> {

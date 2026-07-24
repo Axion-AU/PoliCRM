@@ -14,23 +14,7 @@ import { branchesApi, type Branch } from "../services/api";
 
 const BRANCH_TYPES = ["national", "state", "branch", "team"] as const;
 
-const TYPE_BADGE_COLORS: Record<string, { color: string; bg: string }> = {
-  national: { color: "#e11d48", bg: "rgba(225,29,72,0.1)" },
-  state:    { color: "#0d9488", bg: "rgba(13,148,136,0.1)" },
-  branch:   { color: "#6366f1", bg: "rgba(99,102,241,0.1)" },
-  team:     { color: "#d97706", bg: "rgba(217,119,6,0.1)" },
-};
-
-function TypeBadge({ type }: { type: string }) {
-  const style = TYPE_BADGE_COLORS[type] ?? { color: "#64748b", bg: "rgba(100,116,139,0.1)" };
-  return (
-    <span className="badge" style={{ color: style.color, background: style.bg }}>
-      {type}
-    </span>
-  );
-}
-
-function fmtDate(iso: string) {
+ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-AU", {
     day: "numeric", month: "short", year: "numeric",
   });
@@ -332,6 +316,13 @@ function BranchGroup({
     return allBranches.find((b) => b.id === parentId)?.name ?? "Unknown";
   };
 
+  const TYPE_BADGE_COLORS: Record<string, { color: string; bg: string }> = {
+    national: { color: "#e11d48", bg: "rgba(225,29,72,0.1)" },
+    state:    { color: "#0d9488", bg: "rgba(13,148,136,0.1)" },
+    branch:   { color: "#6366f1", bg: "rgba(99,102,241,0.1)" },
+    team:     { color: "#d97706", bg: "rgba(217,119,6,0.1)" },
+  };
+
   const style = TYPE_BADGE_COLORS[type] ?? { color: "#64748b", bg: "rgba(100,116,139,0.1)" };
 
   return (
@@ -375,6 +366,7 @@ function BranchGroup({
           {branches.map((b) => {
             const isEditing = editingId === b.id;
             const parentName = getParentName(b.parent_id);
+            const branchStyle = TYPE_BADGE_COLORS[b.type] ?? { color: "#64748b", bg: "rgba(100,116,139,0.1)" };
 
             return (
               <div
@@ -396,15 +388,15 @@ function BranchGroup({
                     width: 28,
                     height: 28,
                     borderRadius: 6,
-                    background: style.bg,
+                    background: branchStyle.bg,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
                   }}
                 >
-                  <span style={{ fontSize: 10, fontWeight: 500, color: style.color, textTransform: "uppercase" }}>
-                    {type[0]}
+                  <span style={{ fontSize: 10, fontWeight: 500, color: branchStyle.color, textTransform: "uppercase" }}>
+                    {b.type[0]}
                   </span>
                 </div>
 

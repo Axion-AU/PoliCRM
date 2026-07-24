@@ -31,7 +31,7 @@ export function HouseholdWidget() {
       try {
         const [statsData, topData] = await Promise.all([
           eraApi.getHouseholdStats(),
-          eraApi.getTopHouseholds(5),
+          eraApi.getTopHouseholds(5, 2),
         ]);
         setStats(statsData);
         setTopHouseholds(topData);

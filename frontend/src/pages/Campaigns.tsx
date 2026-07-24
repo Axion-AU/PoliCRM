@@ -4,7 +4,6 @@ import {
   Plus,
   Send,
   Users,
-  BarChart3,
   AlertCircle,
   CheckCircle2,
   Clock,

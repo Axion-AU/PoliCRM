@@ -1,5 +1,31 @@
 import { useState, useEffect } from "react";
-import type { Member } from "../stores/membersStore";
+interface CheckResult {
+  id: string;
+  result: string;
+  federal_division?: string;
+  timestamp: string;
+  verification_method?: string;
+}
+
+interface Member {
+  id: string;
+  first_name: string;
+  last_name: string;
+  middle_name?: string;
+  email?: string;
+  mobile?: string;
+  phone?: string;
+  dob?: string;
+  nationbuilder_id?: string;
+  primary_address1?: string;
+  primary_address2?: string;
+  primary_city?: string;
+  primary_state?: string;
+  primary_zip?: string;
+  custom_attributes?: string;
+  tags?: unknown[];
+  check_results?: CheckResult[];
+}
 
 import { membersApi } from "../services/api";
 import { Modal } from "./ui/modal";
