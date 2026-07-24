@@ -21,10 +21,43 @@ services:
       retries: 5
 
   # ============================================================
-  # Main app: Python FastAPI + React frontend
+  # Rust backend (default service)
+  # ============================================================
+  backend-rs:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend-rs
+    image: ${BACKEND_RS_IMAGE:-ghcr.io/policrm/policrm-backend-rs:latest}
+    container_name: policrm-backend-rs
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_RS_PORT:-8080}:8080"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-policrm}:${POSTGRES_PASSWORD:-policrm_dev_2024}@postgres:5432/${POSTGRES_DB:-policrm}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env}
+      - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - ERA_DIR=/app/era
+      - RUST_LOG=${RUST_LOG:-info}
+    volumes:
+      - ${ERA_DIR:-./era}:/app/era
+      - crm_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ============================================================
+  # Legacy app: Python FastAPI + React frontend
   # ============================================================
   app:
-    # Use local build for development, ghcr.io image for production
+    profiles:
+      - legacy
     build:
       context: .
       dockerfile: Dockerfile
@@ -38,11 +71,9 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-policrm}:${POSTGRES_PASSWORD:-policrm_dev_2024}@postgres:5432/${POSTGRES_DB:-policrm}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env}
       - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
-      - FIREBASE_CREDENTIALS_PATH=/app/credentials/firebase.json
       - DEBUG=${DEBUG:-false}
     volumes:
       - ${ERA_DIR:-./era}:/app/era
-      - ${FIREBASE_CREDENTIALS:-./policrm-5f60f-firebase-adminsdk-fbsvc-c4a252e080.json}:/app/credentials/firebase.json:ro
       - crm_data:/app/data
     depends_on:
       postgres:
@@ -53,34 +84,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-
-  # ============================================================
-  # Rust backend (active rewrite, optional)
-  # ============================================================
-  backend-rs:
-    profiles:
-      - rust
-    build:
-      context: .
-      dockerfile: Dockerfile.backend-rs
-    image: ${BACKEND_RS_IMAGE:-ghcr.io/policrm/policrm-backend-rs:latest}
-    container_name: policrm-backend-rs
-    restart: unless-stopped
-    ports:
-      - "${BACKEND_RS_PORT:-8080}:8080"
-    environment:
-      - DATABASE_URL=sqlite:///app/data/crm.db
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env}
-      - ERA_DIR=/app/era
-    volumes:
-      - ${ERA_DIR:-./era}:/app/era
-      - crm_data:/app/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
 volumes:
   postgres_data:
