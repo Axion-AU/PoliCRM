@@ -23,6 +23,7 @@ pub struct User {
     pub role: String,
     pub branch_id: Option<Uuid>,
     pub is_active: bool,
+    pub password_hash: Option<String>,
     pub last_login_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

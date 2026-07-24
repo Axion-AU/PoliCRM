@@ -1,93 +1,85 @@
-import type { Env } from "./index";
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzle } from "drizzle-orm/d1";
+import * as schema from "./db/schema";
 
-export interface TokenPayload {
-  sub: string;
-  email: string;
-  role: string;
-  iat: number;
-  exp: number;
-  iss: string;
-}
+export type AuthEnv = {
+  DB: D1Database;
+  KV: KVNamespace;
+  BETTER_AUTH_SECRET: string;
+  BETTER_AUTH_URL: string;
+  BACKEND_URL: string;
+};
 
-function base64UrlEncode(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
+export function createAuth(env: AuthEnv) {
+  const db = drizzle(env.DB);
 
-function base64UrlDecode(str: string): Uint8Array {
-  str = str.replace(/-/g, "+").replace(/_/g, "/");
-  while (str.length % 4) str += "=";
-  const binary = atob(str);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-async function getSigningKey(env: Env): Promise<CryptoKey> {
-  const rawKey = env.AUTH_SECRET;
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(rawKey.padEnd(32, ".").slice(0, 32));
-  return crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign", "verify"],
-  );
-}
-
-export async function signToken(payload: Omit<TokenPayload, "iat" | "iss">, env: Env): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  const fullPayload: TokenPayload = {
-    ...payload,
-    iat: now,
-    iss: env.JWT_ISSUER,
-  };
-
-  const encoder = new TextEncoder();
-  const header = base64UrlEncode(encoder.encode(JSON.stringify({ alg: "HS256", typ: "JWT" })));
-  const body = base64UrlEncode(encoder.encode(JSON.stringify(fullPayload)));
-
-  const key = await getSigningKey(env);
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(`${header}.${body}`),
-  );
-
-  return `${header}.${body}.${base64UrlEncode(signature)}`;
-}
-
-export async function verifyToken(token: string, env: Env): Promise<TokenPayload | null> {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-
-  const [headerB64, bodyB64, sigB64] = parts;
-  const encoder = new TextEncoder();
-
-  const key = await getSigningKey(env);
-  const isValid = await crypto.subtle.verify(
-    "HMAC",
-    key,
-    base64UrlDecode(sigB64),
-    encoder.encode(`${headerB64}.${bodyB64}`),
-  );
-
-  if (!isValid) return null;
-
-  const decoder = new TextDecoder();
-  const payload: TokenPayload = JSON.parse(decoder.decode(base64UrlDecode(bodyB64)));
-
-  if (payload.exp < Math.floor(Date.now() / 1000)) return null;
-
-  return payload;
+  return betterAuth({
+    database: drizzleAdapter(db, {
+      provider: "sqlite",
+      schema,
+    }),
+    emailAndPassword: {
+      enabled: true,
+    },
+    user: {
+      additionalFields: {
+        role: {
+          type: "string",
+          required: false,
+          defaultValue: "organiser",
+          input: false,
+        },
+        branchId: {
+          type: "string",
+          required: false,
+          input: true,
+        },
+      },
+    },
+    secondaryStorage: {
+      get: async (key) => {
+        try {
+          return await env.KV.get(key);
+        } catch {
+          return null;
+        }
+      },
+      set: async (key, value, ttl) => {
+        const opts: { expirationTtl?: number } = {};
+        if (ttl) opts.expirationTtl = ttl;
+        await env.KV.put(key, value, opts);
+      },
+      delete: async (key) => {
+        await env.KV.delete(key);
+      },
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          after: async (user) => {
+            // When a user is created via Better Auth, sync it to the Rust backend
+            // via a POST to BACKEND_URL/users
+            try {
+              const backendUrl = env.BACKEND_URL;
+              await fetch(`${backendUrl}/users`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  id: user.id,
+                  email: user.email,
+                  name: user.name,
+                  role: (user as Record<string, string>).role || "organiser",
+                }),
+              });
+            } catch (e) {
+              console.error("Failed to sync user to backend:", e);
+            }
+          },
+        },
+      },
+    },
+    secret: env.BETTER_AUTH_SECRET,
+    baseURL: env.BETTER_AUTH_URL,
+  });
 }

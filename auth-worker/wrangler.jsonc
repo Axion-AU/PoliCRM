@@ -1,24 +1,24 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "policrm-auth",
+  "name": "policrm-auth-worker",
   "main": "src/index.ts",
-  "compatibility_date": "2025-04-01",
+  "compatibility_date": "2026-07-01",
   "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "policrm-auth-db",
+      "database_id": "policrm-auth-db"
+    }
+  ],
   "kv_namespaces": [
     {
-      "binding": "USERS_KV",
-      "id": "",
-      "preview_id": ""
-    },
-    {
-      "binding": "SESSIONS_KV",
-      "id": "",
-      "preview_id": ""
+      "binding": "KV",
+      "id": "policrm-auth-kv",
+      "preview_id": "policrm-auth-kv"
     }
   ],
   "vars": {
-    "BACKEND_URL": "http://localhost:8000",
-    "JWT_ISSUER": "policrm-auth-worker",
-    "TOKEN_EXPIRY_SECONDS": "86400"
+    "BACKEND_URL": "http://localhost:8080",
+    "BETTER_AUTH_URL": "http://localhost:8787"
   }
 }

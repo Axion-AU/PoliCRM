@@ -8,6 +8,16 @@
  *   VITE_API_BASE_URL=http://localhost:8080
  */
 
+const TOKEN_KEY = "policrm_auth_token";
+
+function getAuthToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
 function validateApiBase(candidate?: string): string {
   const raw = candidate ?? "http://localhost:8080";
   try {
@@ -67,14 +77,26 @@ async function request<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options?.headers as Record<string, string> | undefined),
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
     ...options,
+    headers,
   });
+
+  if (res.status === 401) {
+    localStorage.removeItem(TOKEN_KEY);
+    window.location.href = "/login";
+    throw Object.assign(new Error("Session expired"), { status: 401 });
+  }
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;

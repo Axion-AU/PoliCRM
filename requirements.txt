@@ -11,7 +11,7 @@ sqlalchemy
 pydantic
 jinja2
 python-multipart
-firebase-admin
+bcrypt
 cryptography
 python-dotenv
 requests

@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 
-/* ─── Types ──────────────────────────────────────────────────────────────── */
 export interface User {
   id: string;
   name: string;
@@ -14,71 +13,127 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  getToken: () => string | null;
 }
 
-/* ─── Context ────────────────────────────────────────────────────────────── */
 const AuthContext = createContext<AuthContextType | null>(null);
 
-/* ─── Stub data ──────────────────────────────────────────────────────────── */
-// TODO: Replace with real auth (Firebase or otherwise) in Phase 2.
-const STUB_USER: User = {
-  id: "stub-001",
-  name: "Demo User",
-  email: "admin@policrm.au",
-  role: "sys_admin",
-};
+const AUTH_WORKER_URL = import.meta.env.VITE_AUTH_WORKER_URL || "";
+const TOKEN_KEY = "policrm_auth_token";
+const USER_KEY = "policrm_user";
 
-const STORAGE_KEY = "policrm_stub_auth";
+function getStoredToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
 
-/* ─── Provider ───────────────────────────────────────────────────────────── */
+function setStoredToken(token: string | null) {
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
+function getStoredUser(): User | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as User;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredUser(user: User | null) {
+  if (user) {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(USER_KEY);
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(getStoredUser);
   const [isLoading, setIsLoading] = useState(true);
+  const tokenRef = useRef<string | null>(getStoredToken());
+  const initRef = useRef(false);
 
-  // Restore session from localStorage on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as unknown;
-        // Validate required shape before trusting stored data
-        if (
-          parsed !== null &&
-          typeof parsed === "object" &&
-          "id" in parsed &&
-          "name" in parsed &&
-          "email" in parsed &&
-          "role" in parsed
-        ) {
-          setUser(parsed as User);
-        } else {
-          console.error("Invalid auth payload in storage; clearing.", STORAGE_KEY);
-          localStorage.removeItem(STORAGE_KEY);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to restore auth session from storage:", STORAGE_KEY, err);
-      localStorage.removeItem(STORAGE_KEY);
-    } finally {
+    if (initRef.current) return;
+    initRef.current = true;
+
+    const token = tokenRef.current;
+    if (!token) {
       setIsLoading(false);
+      return;
     }
+
+    fetch(`${AUTH_WORKER_URL}/auth/session`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Session invalid");
+        return res.json();
+      })
+      .then((data) => {
+        if (data.user) {
+          const resolved: User = {
+            id: data.user.id,
+            name: data.user.name || data.user.email,
+            email: data.user.email,
+            role: data.user.role,
+          };
+          setUser(resolved);
+          setStoredUser(resolved);
+        } else {
+          setUser(null);
+          setStoredToken(null);
+          setStoredUser(null);
+        }
+      })
+      .catch(() => {
+        setUser(null);
+        setStoredToken(null);
+        setStoredUser(null);
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback(async (email: string, _password: string) => {
-    if (import.meta.env.MODE !== "development") {
-      throw new Error("Authentication is not yet configured for production.");
+  const login = useCallback(async (email: string, password: string) => {
+    const res = await fetch(`${AUTH_WORKER_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), password }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || "Login failed");
     }
-    // Dev stub: accept any credentials.
-    // TODO: Replace with real auth (Firebase or otherwise) in Phase 2.
-    await new Promise((r) => setTimeout(r, 600)); // Simulate network delay
-    setUser(STUB_USER);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(STUB_USER));
+
+    const data = await res.json();
+    tokenRef.current = data.token;
+    setStoredToken(data.token);
+
+    const loggedInUser: User = {
+      id: data.user.id,
+      name: data.user.name || data.user.email,
+      email: data.user.email,
+      role: data.user.role,
+    };
+    setUser(loggedInUser);
+    setStoredUser(loggedInUser);
   }, []);
 
   const logout = useCallback(() => {
+    tokenRef.current = null;
+    setStoredToken(null);
+    setStoredUser(null);
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
+    fetch(`${AUTH_WORKER_URL}/auth/logout`, { method: "POST" }).catch(() => {});
   }, []);
+
+  const getToken = useCallback(() => tokenRef.current, []);
 
   return (
     <AuthContext.Provider
@@ -88,6 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         login,
         logout,
+        getToken,
       }}
     >
       {children}
@@ -95,7 +151,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ─── Hook ───────────────────────────────────────────────────────────────── */
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextType {
   const ctx = useContext(AuthContext);

@@ -11,7 +11,7 @@ router = APIRouter()
 @router.get("", response_model=List[dict])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin_user)):
     users = db.query(User).offset(skip).limit(limit).all()
-    return [{"id": u.id, "email": u.email, "role": u.role, "is_active": u.is_active, "firebase_uid": u.firebase_uid} for u in users]
+    return [{"id": u.id, "email": u.email, "name": u.name, "role": u.role, "is_active": u.is_active} for u in users]
 
 @router.post("", status_code=201)
 def create_user(user_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin_user)):
@@ -27,9 +27,9 @@ def create_user(user_data: dict, db: Session = Depends(get_db), current_user: Us
     
     new_user = User(
         email=email,
+        name=user_data.get("name"),
         role=user_data.get("role", "user"),
         is_active=user_data.get("is_active", True),
-        firebase_uid=None # Will be linked on first login
     )
     db.add(new_user)
     db.commit()

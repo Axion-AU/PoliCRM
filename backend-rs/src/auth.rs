@@ -32,9 +32,51 @@ where
     type Rejection = StatusCode;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let user_id_str = parts
-            .headers
-            .get(HeaderName::from_static("x-user-id"))
+        let is_dev = std::env::var("DEV_MODE").unwrap_or_default() == "true";
+
+        // In dev mode, if auth-worker headers are missing, use a default admin user
+        let user_id_header = parts.headers.get(HeaderName::from_static("x-user-id"));
+        if is_dev && user_id_header.is_none() {
+            let pool = SqlitePool::from_ref(state);
+            let dev_email = "admin@policrm.au";
+            let existing = sqlx::query_as::<_, crate::models::User>(
+                "SELECT * FROM users WHERE email = ?1"
+            )
+            .bind(dev_email)
+            .fetch_optional(&pool)
+            .await
+            .unwrap_or(None);
+
+            if let Some(u) = existing {
+                return Ok(CurrentUser {
+                    id: u.id,
+                    email: u.email,
+                    name: u.name,
+                    role: u.role,
+                    branch_id: u.branch_id,
+                });
+            }
+
+            let id = Uuid::new_v4();
+            let _ = sqlx::query(
+                "INSERT INTO users (id, email, name, role, is_active) VALUES (?1, ?2, ?3, 'sys_admin', 1)"
+            )
+            .bind(id)
+            .bind(dev_email)
+            .bind("Dev Admin")
+            .execute(&pool)
+            .await;
+
+            return Ok(CurrentUser {
+                id,
+                email: dev_email.to_string(),
+                name: "Dev Admin".to_string(),
+                role: "sys_admin".to_string(),
+                branch_id: None,
+            });
+        }
+
+        let user_id_str = user_id_header
             .and_then(|v| v.to_str().ok())
             .ok_or(StatusCode::UNAUTHORIZED)?;
 

@@ -11,10 +11,8 @@ export default defineConfig({
       output: {
         manualChunks: {
           "vendor-react": ["react", "react-dom", "react-router-dom"],
-          "vendor-firebase": [
-            "firebase/app",
-            "firebase/auth",
-            "firebase/firestore",
+          "vendor-auth": [
+            "@auth/core",
           ],
           "vendor-leaflet": ["leaflet", "react-leaflet"],
           "vendor-framer-motion": ["framer-motion"],
@@ -35,6 +33,10 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:8000",
         rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+      "/auth": {
+        target: "http://localhost:8088",
+        changeOrigin: true,
       },
       "/ws": {
         target: "ws://localhost:8000",

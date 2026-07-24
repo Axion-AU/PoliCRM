@@ -97,10 +97,13 @@ async def startup_event():
     try:
         if db.query(User).count() == 0:
             logger.info("Seeding initial admin users...")
+            import bcrypt
+            default_password = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")
+            hashed = bcrypt.hashpw(default_password.encode(), bcrypt.gensalt()).decode()
             initial_users = [
-                User(email="miles@fusionparty.org.au", role="admin", is_active=True),
-                User(email="drew@fusionparty.org.au", role="admin", is_active=True),
-                User(email="admin@fusionparty.org.au", role="admin", is_active=True)
+                User(email="miles@fusionparty.org.au", name="Miles", role="admin", is_active=True, password_hash=hashed),
+                User(email="drew@fusionparty.org.au", name="Drew", role="admin", is_active=True, password_hash=hashed),
+                User(email="admin@fusionparty.org.au", name="Admin", role="admin", is_active=True, password_hash=hashed),
             ]
             db.add_all(initial_users)
             db.commit()
