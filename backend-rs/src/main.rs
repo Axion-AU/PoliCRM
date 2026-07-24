@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(automations::router())
         .merge(public_pages::router())
         .merge(auth_routes::router())
-        .merge(branches::router())
+        .nest("/branches", branches::router())
         .nest("/era", era::handlers::router())
         .with_state(pool);
 
