@@ -1,12 +1,22 @@
 use axum::{
-    extract::{FromRef, FromRequestParts, Request},
-    http::{HeaderMap, HeaderName, StatusCode, request::Parts},
-    response::Response,
+    extract::{FromRef, FromRequestParts},
+    http::{HeaderName, StatusCode, request::Parts},
 };
+use jsonwebtoken::{DecodingKey, Validation, decode, encode, Header, EncodingKey};
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-// ─── CurrentUser ────────────────────────────────────────────────────────────
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Claims {
+    pub sub: String,       // user UUID
+    pub email: String,
+    pub name: String,
+    pub role: String,
+    pub branch_id: Option<String>,
+    pub exp: usize,
+    pub iat: usize,
+}
 
 #[derive(Debug, Clone)]
 pub struct CurrentUser {
@@ -17,143 +27,133 @@ pub struct CurrentUser {
     pub branch_id: Option<Uuid>,
 }
 
-const HEADER_USER_ID: &str = "X-User-Id";
-const HEADER_USER_EMAIL: &str = "X-User-Email";
-const HEADER_USER_NAME: &str = "X-User-Name";
-const HEADER_USER_ROLE: &str = "X-User-Role";
-const HEADER_USER_BRANCH: &str = "X-User-Branch-Id";
+#[derive(Debug, Clone)]
+pub struct AdminUser(pub CurrentUser);
+
+fn jwt_secret() -> String {
+    std::env::var("JWT_SECRET")
+        .or_else(|_| std::env::var("SECRET_KEY"))
+        .unwrap_or_else(|_| "change-me-in-production".to_string())
+}
+
+pub fn create_token(user: &CurrentUser) -> Result<String, String> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs() as usize;
+
+    let claims = Claims {
+        sub: user.id.to_string(),
+        email: user.email.clone(),
+        name: user.name.clone(),
+        role: user.role.clone(),
+        branch_id: user.branch_id.map(|id| id.to_string()),
+        exp: now + 86400 * 7, // 7 days
+        iat: now,
+    };
+
+    encode(&Header::default(), &claims, &EncodingKey::from_secret(jwt_secret().as_bytes()))
+        .map_err(|e| e.to_string())
+}
+
+fn decode_token(token: &str) -> Result<Claims, StatusCode> {
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(jwt_secret().as_bytes()),
+        &Validation::default(),
+    )
+    .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    Ok(token_data.claims)
+}
 
 impl<S> FromRequestParts<S> for CurrentUser
 where
     S: Send + Sync,
-    SqlitePool: axum::extract::FromRef<S>,
-    S: std::fmt::Debug,
+    SqlitePool: FromRef<S>,
 {
     type Rejection = StatusCode;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let is_dev = std::env::var("DEV_MODE").unwrap_or_default() == "true";
+        // Strategy 1: X-User-* headers from auth-worker (production mode)
+        if let Some(user_id_str) = parts
+            .headers
+            .get(HeaderName::from_static("x-user-id"))
+            .and_then(|v| v.to_str().ok())
+        {
+            let id = Uuid::parse_str(user_id_str).map_err(|_| StatusCode::UNAUTHORIZED)?;
+            let email = parts
+                .headers
+                .get(HeaderName::from_static("x-user-email"))
+                .and_then(|v| v.to_str().ok())
+                .ok_or(StatusCode::UNAUTHORIZED)?;
+            let name = parts
+                .headers
+                .get(HeaderName::from_static("x-user-name"))
+                .and_then(|v| v.to_str().ok())
+                .ok_or(StatusCode::UNAUTHORIZED)?;
+            let role = parts
+                .headers
+                .get(HeaderName::from_static("x-user-role"))
+                .and_then(|v| v.to_str().ok())
+                .ok_or(StatusCode::UNAUTHORIZED)?;
+            let branch_id = parts
+                .headers
+                .get(HeaderName::from_static("x-user-branch-id"))
+                .and_then(|v| v.to_str().ok())
+                .filter(|s| !s.is_empty())
+                .and_then(|s| Uuid::parse_str(s).ok());
 
-        // In dev mode, if auth-worker headers are missing, use a default admin user
-        let user_id_header = parts.headers.get(HeaderName::from_static("x-user-id"));
-        if is_dev && user_id_header.is_none() {
             let pool = SqlitePool::from_ref(state);
-            let dev_email = "admin@policrm.au";
-            let existing = sqlx::query_as::<_, crate::models::User>(
-                "SELECT * FROM users WHERE email = ?1"
-            )
-            .bind(dev_email)
-            .fetch_optional(&pool)
-            .await
-            .unwrap_or(None);
-
-            if let Some(u) = existing {
-                return Ok(CurrentUser {
-                    id: u.id,
-                    email: u.email,
-                    name: u.name,
-                    role: u.role,
-                    branch_id: u.branch_id,
-                });
-            }
-
-            let id = Uuid::new_v4();
             let _ = sqlx::query(
-                "INSERT INTO users (id, email, name, role, is_active) VALUES (?1, ?2, ?3, 'sys_admin', 1)"
+                "INSERT INTO users (id, email, name, role, branch_id, last_login_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
+                 ON CONFLICT(id) DO UPDATE SET \
+                   email = excluded.email, \
+                   name = excluded.name, \
+                   role = excluded.role, \
+                   branch_id = excluded.branch_id, \
+                   last_login_at = excluded.last_login_at",
             )
             .bind(id)
-            .bind(dev_email)
-            .bind("Dev Admin")
+            .bind(email.to_string())
+            .bind(name.to_string())
+            .bind(role.to_string())
+            .bind(branch_id)
+            .bind(chrono::Utc::now())
             .execute(&pool)
             .await;
 
-            return Ok(CurrentUser {
-                id,
-                email: dev_email.to_string(),
-                name: "Dev Admin".to_string(),
-                role: "sys_admin".to_string(),
-                branch_id: None,
-            });
+            return Ok(CurrentUser { id, email: email.to_string(), name: name.to_string(), role: role.to_string(), branch_id });
         }
 
-        let user_id_str = user_id_header
+        // Strategy 2: Bearer JWT token (direct auth mode)
+        let auth_header = parts
+            .headers
+            .get(HeaderName::from_static("authorization"))
             .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
             .ok_or(StatusCode::UNAUTHORIZED)?;
 
-        let email = parts
-            .headers
-            .get(HeaderName::from_static("x-user-email"))
-            .and_then(|v| v.to_str().ok())
-            .ok_or(StatusCode::UNAUTHORIZED)?
-            .to_string();
+        let claims = decode_token(auth_header)?;
 
-        let name = parts
-            .headers
-            .get(HeaderName::from_static("x-user-name"))
-            .and_then(|v| v.to_str().ok())
-            .ok_or(StatusCode::UNAUTHORIZED)?
-            .to_string();
-
-        let role = parts
-            .headers
-            .get(HeaderName::from_static("x-user-role"))
-            .and_then(|v| v.to_str().ok())
-            .ok_or(StatusCode::UNAUTHORIZED)?
-            .to_string();
-
-        let branch_id = parts
-            .headers
-            .get(HeaderName::from_static("x-user-branch-id"))
-            .and_then(|v| v.to_str().ok())
-            .filter(|s| !s.is_empty())
-            .and_then(|s| Uuid::parse_str(s).ok());
-
-        let id = Uuid::parse_str(user_id_str).map_err(|_| StatusCode::UNAUTHORIZED)?;
-
-        let pool = SqlitePool::from_ref(state);
-
-        let _ = sqlx::query(
-            "INSERT INTO users (id, email, name, role, branch_id, last_login_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
-             ON CONFLICT(id) DO UPDATE SET \
-               email = excluded.email, \
-               name = excluded.name, \
-               role = excluded.role, \
-               branch_id = excluded.branch_id, \
-               last_login_at = excluded.last_login_at",
-        )
-        .bind(id)
-        .bind(&email)
-        .bind(&name)
-        .bind(&role)
-        .bind(branch_id)
-        .bind(chrono::Utc::now())
-        .execute(&pool)
-        .await
-        .map_err(|e| {
-            eprintln!("Failed to upsert user from auth headers: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        let id = Uuid::parse_str(&claims.sub).map_err(|_| StatusCode::UNAUTHORIZED)?;
+        let branch_id = claims.branch_id.as_deref().and_then(|s| Uuid::parse_str(s).ok());
 
         Ok(CurrentUser {
             id,
-            email,
-            name,
-            role,
+            email: claims.email,
+            name: claims.name,
+            role: claims.role,
             branch_id,
         })
     }
 }
 
-// ─── AdminUser ──────────────────────────────────────────────────────────────
-
-pub struct AdminUser(pub CurrentUser);
-
 impl<S> FromRequestParts<S> for AdminUser
 where
     S: Send + Sync,
-    SqlitePool: axum::extract::FromRef<S>,
-    S: std::fmt::Debug,
+    SqlitePool: FromRef<S>,
 {
     type Rejection = StatusCode;
 
@@ -163,26 +163,5 @@ where
             return Err(StatusCode::FORBIDDEN);
         }
         Ok(AdminUser(user))
-    }
-}
-
-// ─── BranchUser ─────────────────────────────────────────────────────────────
-
-pub struct BranchUser(pub CurrentUser);
-
-impl<S> FromRequestParts<S> for BranchUser
-where
-    S: Send + Sync,
-    SqlitePool: axum::extract::FromRef<S>,
-    S: std::fmt::Debug,
-{
-    type Rejection = StatusCode;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let user = CurrentUser::from_request_parts(parts, state).await?;
-        if user.branch_id.is_none() {
-            return Err(StatusCode::FORBIDDEN);
-        }
-        Ok(BranchUser(user))
     }
 }

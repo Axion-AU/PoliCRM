@@ -18,7 +18,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const AUTH_WORKER_URL = import.meta.env.VITE_AUTH_WORKER_URL || "";
 const TOKEN_KEY = "policrm_auth_token";
 const USER_KEY = "policrm_user";
 
@@ -68,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    fetch(`${AUTH_WORKER_URL}/auth/session`, {
+    fetch(`/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
@@ -76,20 +75,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return res.json();
       })
       .then((data) => {
-        if (data.user) {
-          const resolved: User = {
-            id: data.user.id,
-            name: data.user.name || data.user.email,
-            email: data.user.email,
-            role: data.user.role,
-          };
-          setUser(resolved);
-          setStoredUser(resolved);
-        } else {
-          setUser(null);
-          setStoredToken(null);
-          setStoredUser(null);
-        }
+        const resolved: User = {
+          id: data.id,
+          name: data.name || data.email,
+          email: data.email,
+          role: data.role,
+        };
+        setUser(resolved);
+        setStoredUser(resolved);
       })
       .catch(() => {
         setUser(null);
@@ -100,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch(`${AUTH_WORKER_URL}/auth/login`, {
+    const res = await fetch(`/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: email.trim(), password }),
@@ -130,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStoredToken(null);
     setStoredUser(null);
     setUser(null);
-    fetch(`${AUTH_WORKER_URL}/auth/logout`, { method: "POST" }).catch(() => {});
+    fetch(`/auth/logout`, { method: "POST" }).catch(() => {});
   }, []);
 
   const getToken = useCallback(() => tokenRef.current, []);

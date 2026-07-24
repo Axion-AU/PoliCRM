@@ -19,7 +19,8 @@ function getAuthToken(): string | null {
 }
 
 function validateApiBase(candidate?: string): string {
-  const raw = candidate ?? "http://localhost:8080";
+  const raw = candidate ?? "";
+  if (!raw) return "";
   try {
     const url = new URL(raw);
     if (url.protocol === "http:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {

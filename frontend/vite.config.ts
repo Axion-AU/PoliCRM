@@ -11,9 +11,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           "vendor-react": ["react", "react-dom", "react-router-dom"],
-          "vendor-auth": [
-            "@auth/core",
-          ],
           "vendor-leaflet": ["leaflet", "react-leaflet"],
           "vendor-framer-motion": ["framer-motion"],
           "vendor-ui": [
@@ -30,19 +27,90 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": {
-        target: "http://localhost:8000",
-        rewrite: (path) => path.replace(/^\/api/, ""),
-      },
       "/auth": {
-        target: "http://localhost:8088",
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/persons": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/import": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/analytics": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/stats": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/users": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/branches": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/tasks": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/memberships": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/donations": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/events": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/email-campaigns": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/sms": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/prospects": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/automations": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/pages": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/p": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/activity": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/era": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/health": {
+        target: "http://localhost:8080",
         changeOrigin: true,
       },
       "/ws": {
-        target: "ws://localhost:8000",
+        target: "ws://localhost:8080",
         ws: true,
       },
     },
   },
 });
-
