@@ -7,6 +7,14 @@ import {
   Settings,
   LogOut,
   Calendar,
+  ListChecks,
+  CreditCard,
+  DollarSign,
+  Mail,
+  MessageSquare,
+  TrendingUp,
+  Zap,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -34,9 +42,10 @@ const NAV_SECTIONS: NavSection[] = [
     { to: "/app/automations", icon: Zap, label: "Automations" },
   ]},
   { section: "Admin", items: [
-    { to: "/app/admin/users",    icon: Shield, label: "Admin"    },
-    { to: "/app/war-room",  icon: Map,    label: "War Room" },
-    { to: "/app/settings",  icon: Settings, label: "Settings" },
+    { to: "/app/admin/users",    icon: Shield,   label: "Users"    },
+    { to: "/app/admin/branches", icon: Shield,   label: "Branches" },
+    { to: "/app/war-room",       icon: Map,      label: "War Room" },
+    { to: "/app/settings",       icon: Settings,  label: "Settings" },
   ]},
 ];
 
