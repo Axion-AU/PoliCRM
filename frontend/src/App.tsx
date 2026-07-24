@@ -17,6 +17,7 @@ const Import = lazy(() => import("./pages/Import"));
 const WarRoom = lazy(() =>
   import("./pages/WarRoom").then((m) => ({ default: m.WarRoom })),
 );
+const Settings = lazy(() => import("./pages/Settings"));
 
 /* ─── Loading fallback ───────────────────────────────────────────────────── */
 function PageLoader() {
@@ -65,6 +66,7 @@ function App() {
                 <Route path="members" element={<Members />} />
                 <Route path="import" element={<Import />} />
                 <Route path="war-room" element={<WarRoom />} />
+                <Route path="settings" element={<Settings />} />
               </Route>
 
               {/* Catch-all */}

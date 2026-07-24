@@ -68,8 +68,8 @@
     "provider": "claude"
   },
   "files": {
-    "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
-    "exclude": ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.git/**"]
+    "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs", "**/*.rs"],
+    "exclude": ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.git/**", "**/target/**"]
   },
   "codeEditor": {
     "highlightErrors": true,

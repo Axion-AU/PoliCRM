@@ -1,6 +1,7 @@
 mod models;
 mod api;
 mod crypto;
+mod era;
 
 use axum::{
     routing::get,
@@ -44,9 +45,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Database migrations completed successfully.");
 
     // Build our application with a single route
+    let era_dir = std::env::var("ERA_DIR").unwrap_or_else(|_| "era".to_string());
+    
+    // On startup, sync ERA directory (auto-resume any interrupted imports)
+    let pool_for_sync = pool.clone();
+    tokio::spawn(async move {
+        era::service::sync_era_files(&pool_for_sync, &era_dir).await;
+    });
+
     let app = Router::new()
         .route("/health", get(health_check))
         .merge(api::router())
+        .nest("/era", era::handlers::router())
         .with_state(pool);
 
     // Run it with fallback to alternative ports if occupied

@@ -4,6 +4,7 @@ import {
   Users,
   Upload,
   Map,
+  Settings,
   LogOut,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -14,6 +15,7 @@ const NAV_ITEMS = [
   { to: "/app/members",   icon: Users,           label: "Members"   },
   { to: "/app/import",    icon: Upload,          label: "Import"    },
   { to: "/app/war-room",  icon: Map,             label: "War Room"  },
+  { to: "/app/settings",  icon: Settings,        label: "Settings"  },
 ] as const;
 
 /* ─── Role labels ────────────────────────────────────────────────────────── */
