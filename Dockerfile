@@ -66,9 +66,6 @@ COPY src/api/static/css/ ./src/api/static/css/
 COPY src/api/static/js/ ./src/api/static/js/
 COPY src/api/static/geojson/ ./src/api/static/geojson/
 
-# Copy GeoJSON directory
-COPY src/GeoJSON/ ./src/GeoJSON/
-
 # Expose FastAPI port
 EXPOSE 8000
 
