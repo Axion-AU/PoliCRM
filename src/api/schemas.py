@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -95,16 +95,67 @@ class MemberUpdate(BaseModel):
     renewal_date: Optional[datetime] = None
     resignation_date: Optional[datetime] = None
     party_id: Optional[int] = None
+    custom_attributes: Optional[str] = None # JSON string
 
+
+
+class InteractionBase(BaseModel):
+    type: str
+    timestamp: datetime
+    details: str
+    remote_id: Optional[str] = None
+    created_by: Optional[str] = None
+
+class InteractionCreate(InteractionBase):
+    pass
+
+class InteractionResponse(InteractionBase):
+    id: int
+    
+    class Config:
+        from_attributes = True
+
+class RelationshipBase(BaseModel):
+    to_member_id: int
+    type: str
+    strength: Optional[int] = None
+
+class RelationshipCreate(RelationshipBase):
+    pass
+
+class RelationshipResponse(RelationshipBase):
+    id: int
+    
+    class Config:
+        from_attributes = True
+
+# Update MemberResponse to include new fields
 class MemberResponse(MemberBase):
     id: int
     created_at: datetime
     updated_at: datetime
     is_duplicate: bool = False
+    custom_attributes: str = "{}"
+    dob: Optional[str] = None
+    
+    @field_validator('custom_attributes', mode='before')
+    @classmethod
+    def set_default_custom_attributes(cls, v):
+        return v or "{}"
+
     check_results: List[CheckResultBase] = []
     notes: List[MemberNoteResponse] = []
     tags: List[TagResponse] = []
     party: Optional[PartyResponse] = None
+    interactions: List[InteractionResponse] = []
+    relationships_out: List[RelationshipResponse] = []
+    relationships_in: List[RelationshipResponse] = []
 
     class Config:
         from_attributes = True
+
+class PaginatedMemberResponse(BaseModel):
+    members: List[MemberResponse]
+    total: int
+    skip: int
+    limit: int

@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Boolean, Table
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Boolean, Table, Index
+from sqlalchemy.orm import relationship, backref, object_session
 from datetime import datetime
 from .database import Base
 from .security import EncryptedType
@@ -63,16 +63,54 @@ class Member(Base):
     duplicate_of_id = Column(Integer, ForeignKey('members.id'), nullable=True)
     last_synced_at = Column(DateTime, nullable=True)
     party_id = Column(Integer, ForeignKey('parties.id'), nullable=True)
+    custom_attributes = Column(Text, default="{}") # JSON string for flexible fields
     
     # Relationships
-    check_results = relationship("CheckResult", back_populates="member", cascade="all, delete-orphan")
+    check_results = relationship("CheckResult", back_populates="member", cascade="all, delete-orphan", order_by="CheckResult.id")
     notes = relationship("MemberNote", back_populates="member", cascade="all, delete-orphan")
     tags = relationship("Tag", secondary=member_tags, back_populates="members")
     duplicate_of = relationship("Member", remote_side=[id], foreign_keys=[duplicate_of_id])
     party = relationship("Party", back_populates="members")
+    
+    interactions = relationship("Interaction", back_populates="member", cascade="all, delete-orphan")
+    relationships_out = relationship("Relationship", foreign_keys="Relationship.from_member_id", back_populates="from_member", cascade="all, delete-orphan")
+    relationships_in = relationship("Relationship", foreign_keys="Relationship.to_member_id", back_populates="to_member", cascade="all, delete-orphan")
+
+    @property
+    def dob(self) -> str | None:
+        """Dynamically fetch Date of Birth from linked ERA record if verified."""
+        if not self.check_results:
+            return None
+            
+        last_check = self.check_results[-1]
+        
+        # We only care about passes or partials
+        if last_check.result not in ["Pass", "Partial"]:
+            return None
+            
+        session = object_session(self)
+        if not session:
+            return None
+
+        from .era_models import ERAMatch, ERARecord
+        
+        # Find the highest scoring match for this member
+        match = session.query(ERAMatch, ERARecord.date_of_birth).join(
+            ERARecord, ERAMatch.era_record_id == ERARecord.id
+        ).filter(
+            ERAMatch.member_id == self.id
+        ).order_by(ERAMatch.overall_score.desc()).first()
+
+        if match and match.date_of_birth:
+            return match.date_of_birth
+            
+        return None
 
 class CheckResult(Base):
     __tablename__ = "check_results"
+    __table_args__ = (
+        Index('ix_check_results_member_id_id', 'member_id', 'id'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     member_id = Column(Integer, ForeignKey("members.id"))
@@ -82,6 +120,9 @@ class CheckResult(Base):
     state_division = Column(String, nullable=True)
     local_government = Column(String, nullable=True)
     local_ward = Column(String, nullable=True)
+    
+    # Verification method: 'era' or 'browser' 
+    verification_method = Column(String, nullable=True, default='browser')
     
     timestamp = Column(DateTime, default=datetime.utcnow)
     
@@ -147,3 +188,28 @@ class SavedSearch(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User")
+
+class Interaction(Base):
+    __tablename__ = "interactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(Integer, ForeignKey("members.id"))
+    type = Column(String)  # email, call, donation, meeting, system, note
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    details = Column(Text)  # JSON string
+    remote_id = Column(String, nullable=True)  # ID in external system (e.g. Stripe, SendGrid)
+    created_by = Column(String, nullable=True) # User or System
+    
+    member = relationship("Member", back_populates="interactions")
+
+class Relationship(Base):
+    __tablename__ = "relationships"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    from_member_id = Column(Integer, ForeignKey("members.id"))
+    to_member_id = Column(Integer, ForeignKey("members.id"))
+    type = Column(String)  # spouse, parent, child, colleague, friend
+    strength = Column(Integer, nullable=True)  # 1-5 scale
+    
+    from_member = relationship("Member", foreign_keys=[from_member_id], back_populates="relationships_out")
+    to_member = relationship("Member", foreign_keys=[to_member_id], back_populates="relationships_in")

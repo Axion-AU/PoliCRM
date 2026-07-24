@@ -37,7 +37,7 @@ Two interfaces: a **terminal TUI** for scripted runs and a **web CRM** for day-t
 
 ---
 
-## Installation
+## Quick Start
 
 ```bash
 git clone <repository-url>
@@ -51,7 +51,10 @@ pip install -r requirements.txt
 
 ---
 
-## Usage
+   ```bash
+   cp .env.example .env
+   # Edit .env with your settings
+   ```
 
 ### Web CRM (recommended for most users)
 

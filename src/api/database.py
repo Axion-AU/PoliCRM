@@ -1,12 +1,38 @@
-from sqlalchemy import create_engine
+import os
+from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./crm.db"
+# Support both PostgreSQL and SQLite
+# Set DATABASE_URL env var to use PostgreSQL, otherwise defaults to SQLite
+DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///./crm.db')
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+# Determine if using SQLite
+is_sqlite = DATABASE_URL.startswith('sqlite')
+
+if is_sqlite:
+    engine = create_engine(
+        DATABASE_URL, 
+        connect_args={"check_same_thread": False, "timeout": 30}
+    )
+    
+    # Enable WAL mode for better concurrent access (SQLite only)
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
+else:
+    # PostgreSQL - use connection pool for better performance
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

@@ -3,6 +3,7 @@ import { Search, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-rea
 import { PageHeader } from "../components/PageHeader";
 import { MembershipBadge, type MembershipStatus } from "../components/MembershipBadge";
 import { personsApi, type Person } from "../services/api";
+import { MemberDetailDrawer } from "../components/MemberDetailDrawer";
 
 /* ─── Australian states ─────────────────────────────────────────────────── */
 const STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];
@@ -42,6 +43,7 @@ export default function Members() {
   const [total, setTotal] = useState(MOCK_MEMBERS.length);
   const [loading, setLoading] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -250,7 +252,12 @@ export default function Members() {
               </tr>
             ) : (
               members.map((m) => (
-                <tr key={m.id} className="animate-fade-in">
+                <tr
+                  key={m.id}
+                  className="animate-fade-in"
+                  onClick={() => setSelectedMemberId(m.id)}
+                  style={{ cursor: "pointer" }}
+                >
                   <td>
                     <span
                       style={{
@@ -282,6 +289,13 @@ export default function Members() {
           </tbody>
         </table>
       </div>
+
+      {/* Drawer */}
+      <MemberDetailDrawer
+        memberId={selectedMemberId}
+        onClose={() => setSelectedMemberId(null)}
+        fallbackMember={members.find((m) => m.id === selectedMemberId)}
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (

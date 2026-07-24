@@ -1,12 +1,25 @@
-# AEC Checker - AI Coding Agent Guide
+> AEC Checker automates AEC enrolment verification. Keep agents focused on existing flows; avoid aspirational patterns.
 
-## Project Overview
+## Architecture & Responsibilities
+- Pipeline: CSV (NationBuilder schema) → `aec_checker.py` CLI/TUI → `src/aec_core/browser.py` Selenium automation → results CSV with divisions.
+- FastAPI CRM (`src/api/main.py`) fronts the same logic: seeds admin users/parties, serves built React assets from `src/api/static/dist`, and mounts routers for members/tags/stats/search/analytics/websocket/ERA.
+- BrowserPool (`src/api/worker_pool.py`) is the API-side worker queue: per-thread Firefox drivers, RateLimiter (100/hr, 2000/day), watchdog for stuck workers, ERA short-circuit before hitting AEC.
+- Address normalization lives in `src/utils/convert_addresses.py` (streetTypes/stateAbs maps ~220 entries) and must precede browser checks; PO Boxes stay untouched.
 
-AEC Checker automates verification of Australian voter enrollment by submitting member data to the [AEC website](https://check.aec.gov.au/). It's a **web scraping tool** that uses Selenium to interact with the AEC's complex dropdown-based forms, with built-in anti-bot detection evasion and retry logic.
+## Critical Workflows
+- CLI verification: `python aec_checker.py --infile members.csv --outfile verified.csv --threads 2 --headless --max-retries 5 --delay-min 2.0 --delay-max 4.0`. Use `--dry-run` for validation only and keep threads ≤2 to avoid CAPTCHA.
+- Data prep: `python src/utils/convert_addresses.py <input.csv> <output.csv>` to normalize addresses; expected columns: first/middle/last/nationbuilder_id/primary_address1/primary_city/primary_state/primary_zip.
+- CRM stack: `./run_crm.sh` builds Vite frontend, spins Postgres via Docker if present (else SQLite), then `uvicorn src.api.main:app --reload` on :8000. API docs at /docs, dashboard at /.
+- Tests: `python -m pytest tests/ -v`; targeted `python -m unittest tests/test_aec_checker.py`.
 
-**Architecture:** Multi-threaded Selenium automation → CSV processing → Optional FastAPI backend for CRM integrationAWSZ-highlighted`
+## Selenium/AEC Interaction
+- Only suburb dropdown uses native `Select`; street uses Select2 search box (see `Select2` flow in `browser.py`).
+- Humanization: random user-agents, private browsing, window size randomization, human_type/human_click, base retry delay 3s, rate-limit delay 12-20s between requests, page timeout 20s.
+- Result parsing: `extract_electoral_info()` scrapes federal/state/local/ward labels; statuses include PASS, PARTIAL, FAIL_SUBURB, FAIL_STREET, FAIL_NO_MATCH, CAPTCHA.
 
-**Standard WebDriver `Select()` only works for suburb dropdown** (`DropdownSuburb`), not streets.
+## Threading & Safety
+- `src/aec_core/main.py` worker: never share WebDriver across threads; installs geckodriver once; `MAX_CONSECUTIVE_FAILURES=5` triggers driver reinit; output guarded by `output_lock` and flushed every row.
+- BrowserPool mirrors this with per-worker drivers and requeues on driver death; watchdog restarts workers idle >5m.
 
 ### Data Flow & CSV Schema
 
@@ -135,21 +148,6 @@ Checks: required fields, numeric postcode, non-empty address components.
 - `tests/` - Unit tests (pytest/unittest)
 
 ## Common Pitfalls
-
-1. **Modifying delays/retries** → CAPTCHA floods. Use `--delay-min 3.0 --delay-max 5.0` if seeing blocks.
-2. **Ignoring validation errors** → Runtime failures deep in processing. Always run `--dry-run` on new datasets.
-3. **PO Boxes** → Cannot be verified via AEC. `convert_addresses.py` returns them unchanged; expect `FAIL_STREET`.
-4. **Thread count > 3** → Higher bot detection risk. Recommend 1-2 for production.
-5. **Missing geckodriver** → Use `webdriver-manager` (already in `requirements.txt`) for auto-download.
-
-## When Making Changes
-
-- **Browser interaction**: Test with `--threads 1` first, then scale up
-- **Address parsing**: Add new street types to `streetTypes` dict, not inline
-- **Result extraction**: Update regex patterns in `extract_electoral_info()` if AEC HTML changes
-- **New CLI args**: Add to both `argparse` in `main.py` AND TUI in `aec_checker.py`
-- **Error handling**: Log to both console (Rich) and file handler for debugging
-
-## Future Enhancements (see IMPROVEMENTS.md)
-
-Planned but not implemented: config file loading (`config.example.json` exists), Docker support, alternative browsers (Chrome/Edge), batch auto-splitting for large datasets.
+- Reducing delays/raising thread count causes CAPTCHA floods; prefer delay-min 3.0 / delay-max 5.0 under pressure.
+- Missing geckodriver: local copy in `src/aec_core/bin/geckodriver` or fall back to webdriver-manager.
+- ERA integration: only short-circuits when state data is loaded; otherwise falls back to browser. Keep `STATE_CODE_MAP` in sync with ERA uploads.

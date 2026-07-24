@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, aliased
 from typing import List, Optional
 from datetime import datetime, timedelta
 import csv
@@ -10,7 +10,7 @@ from ..database import get_db
 from ..models import Member, MemberNote, Tag, User, CheckResult, Party, AuditLog
 from ..schemas import (
     MemberCreate, MemberResponse, MemberUpdate,
-    MemberNoteCreate, MemberNoteResponse
+    MemberNoteCreate, MemberNoteResponse, PaginatedMemberResponse
 )
 from ..dependencies import browser_pool, get_current_active_user, get_current_admin_user
 from ..services.audit import log_action
@@ -42,11 +42,30 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_
 
 
-def apply_filters(query, status, state, search, tags, tag_operator):
+def apply_filters(query, db, status, state, search, tags, tag_operator):
     # Apply filters
     if status and "all" not in status:
-        # We need to outerjoin to handle both checked and unchecked members in one query
-        query = query.outerjoin(Member.check_results)
+        # Alias for the latest check result to avoid conflicts with joinedload
+        LatestCheckResult = aliased(CheckResult)
+        
+        # Subquery to get latest check result ID for each member
+        # Must include member_id in select to join on it
+        latest_checks_subquery = db.query(
+            CheckResult.member_id,
+            func.max(CheckResult.id).label("max_id")
+        ).group_by(CheckResult.member_id).subquery()
+        
+        # Join Member -> Subquery
+        query = query.outerjoin(
+            latest_checks_subquery,
+            Member.id == latest_checks_subquery.c.member_id
+        )
+        
+        # Join Subquery -> LatestCheckResult
+        query = query.outerjoin(
+            LatestCheckResult,
+            LatestCheckResult.id == latest_checks_subquery.c.max_id
+        )
         
         status_filters = []
         # Handle single string case if passed as string
@@ -55,22 +74,22 @@ def apply_filters(query, status, state, search, tags, tag_operator):
             
         for s in status:
             if s == "Verified":
-                status_filters.append(CheckResult.result == "Pass")
+                status_filters.append(LatestCheckResult.result == "Pass")
             elif s == "Partial":
-                status_filters.append(CheckResult.result == "Partial")
+                status_filters.append(LatestCheckResult.result == "Partial")
             elif s == "Captcha":
-                status_filters.append(CheckResult.result == "Captcha")
+                status_filters.append(LatestCheckResult.result == "Captcha")
             elif s == "Duplicate":
                 status_filters.append(Member.is_duplicate == True)
             elif s == "Fail":
                 status_filters.append(or_(
-                    CheckResult.result == "Fail",
-                    CheckResult.result == "Fail_Suburb",
-                    CheckResult.result == "Fail_Street",
-                    CheckResult.result == "Fail_No_Match"
+                    LatestCheckResult.result == "Fail",
+                    LatestCheckResult.result == "Fail_Suburb",
+                    LatestCheckResult.result == "Fail_Street",
+                    LatestCheckResult.result == "Fail_No_Match"
                 ))
             elif s == "Unchecked":
-                status_filters.append(CheckResult.id == None)
+                status_filters.append(LatestCheckResult.id == None)
                 
         if status_filters:
             query = query.filter(or_(*status_filters))
@@ -110,74 +129,21 @@ def export_members(
     columns: Optional[List[str]] = Query(None),
     tags: Optional[List[int]] = Query(None),
     tag_operator: str = "AND",
-    format: str = "csv",
+    format: str = "nb", # Default to NationBuilder format
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    query = db.query(Member)
-    query = apply_filters(query, status, state, search, tags, tag_operator)
+    # Use eager loading for efficient export
+    query = db.query(Member).options(
+        joinedload(Member.check_results),
+        joinedload(Member.tags),
+        joinedload(Member.party)
+    )
+    query = apply_filters(query, db, status, state, search, tags, tag_operator)
+
+    from ..era_models import ERAMatch, ERARecord
 
     def iter_csv(query):
-        # Define available columns
-        # Map frontend column names to data extraction logic
-        
-        # Standard CSV Columns
-        standard_cols = {
-            "first_name": ("First Name", lambda m: m.first_name),
-            "last_name": ("Last Name", lambda m: m.last_name),
-            "nationbuilder_id": ("NB ID", lambda m: str(m.nationbuilder_id)),
-            "email": ("Email", lambda m: m.email or ""),
-            "phone": ("Phone", lambda m: m.phone or ""),
-            "address": ("Address", lambda m: f"{m.primary_address1}, {m.primary_city}, {m.primary_state} {m.primary_zip}"),
-            "status": ("Status", lambda m: get_status(m)),
-            "electorate": ("Electorate", lambda m: get_electorate(m)),
-            "party": ("Party", lambda m: m.party.name if m.party else "")
-        }
-        
-        # VEC Specific Columns (Example)
-        vec_cols = {
-            "Surname": lambda m: m.last_name,
-            "Given Names": lambda m: f"{m.first_name} {m.middle_name or ''}".strip(),
-            "Address": lambda m: f"{m.primary_address1} {m.primary_address2 or ''}".strip(),
-            "Suburb": lambda m: m.primary_city,
-            "Postcode": lambda m: m.primary_zip,
-            "Date of Birth": lambda m: "", # Placeholder
-            "Phone": lambda m: m.phone or m.mobile or ""
-        }
-        
-        # AEC Specific Columns (Example)
-        aec_cols = {
-            "MemberID": lambda m: str(m.nationbuilder_id),
-            "FirstName": lambda m: m.first_name,
-            "MiddleName": lambda m: m.middle_name or "",
-            "Surname": lambda m: m.last_name,
-            "AddressLine1": lambda m: m.primary_address1,
-            "AddressLine2": lambda m: m.primary_address2 or "",
-            "Locality": lambda m: m.primary_city,
-            "State": lambda m: m.primary_state,
-            "Postcode": lambda m: m.primary_zip
-        }
-
-        # Select columns based on format
-        if format == "vec":
-            final_cols = vec_cols
-            header = list(vec_cols.keys())
-        elif format == "aec":
-            final_cols = aec_cols
-            header = list(aec_cols.keys())
-        else:
-            # Standard CSV
-            # Determine which columns to export
-            selected_keys = columns if columns else standard_cols.keys()
-            # Filter out invalid keys
-            selected_keys = [k for k in selected_keys if k in standard_cols]
-            
-            final_cols = {k: standard_cols[k][1] for k in selected_keys}
-            header = [standard_cols[k][0] for k in selected_keys]
-        
-        # Header
-        yield ",".join(header) + "\n"
-        
         # Helper functions
         def get_status(member):
             if not member.check_results: return "Unchecked"
@@ -191,33 +157,172 @@ def export_members(
                 return f"{res.federal_division or ''} / {res.state_division or ''}"
             return ""
 
+        def get_tags_with_check_result(member):
+            tags = [t.name for t in member.tags]
+            if member.check_results:
+                last_check = member.check_results[-1]
+                if last_check.timestamp:
+                    # Format: YYYYMM-AECCheck_<RESULT>
+                    # Use get_status logic for consistent result naming (e.g. Pass -> Verified)
+                    res_str = "Verified" if last_check.result == "Pass" else last_check.result
+                    date_str = last_check.timestamp.strftime('%Y%m')
+                    check_tag = f"{date_str}-AECCheck_{res_str}"
+                    tags.append(check_tag)
+            return ",".join(tags)
+
+        # NationBuilder Columns
+        nb_cols = {
+            "nationbuilder_id": lambda m: str(m.nationbuilder_id),
+            "first_name": lambda m: m.first_name,
+            "last_name": lambda m: m.last_name,
+            "email": lambda m: m.email or "",
+            "mobile_number": lambda m: m.mobile or "",
+            "phone_number": lambda m: m.phone or "",
+            "primary_address1": lambda m: m.primary_address1,
+            "primary_address2": lambda m: m.primary_address2 or "",
+            "primary_city": lambda m: m.primary_city,
+            "primary_state": lambda m: m.primary_state,
+            "primary_zip": lambda m: m.primary_zip,
+            "primary_country_code": lambda m: m.primary_country_code or "AU",
+            "dob": lambda m: getattr(m, "_export_dob", None) or "",
+            "aec_result": lambda m: get_status(m),
+            "tags": lambda m: get_tags_with_check_result(m)
+        }
+
+        # Standard CSV Columns
+        standard_cols = {
+            "first_name": ("First Name", lambda m: m.first_name),
+            "last_name": ("Last Name", lambda m: m.last_name),
+            "nationbuilder_id": ("NB ID", lambda m: str(m.nationbuilder_id)),
+            "email": ("Email", lambda m: m.email or ""),
+            "phone": ("Phone", lambda m: m.phone or ""),
+            "address": ("Address", lambda m: f"{m.primary_address1}, {m.primary_city}, {m.primary_state} {m.primary_zip}"),
+            "status": ("Status", lambda m: get_status(m)),
+            "electorate": ("Electorate", lambda m: get_electorate(m)),
+            "dob": ("Date of Birth", lambda m: getattr(m, "_export_dob", None) or ""),
+            "party": ("Party", lambda m: m.party.name if m.party else "")
+        }
+        
+        # VEC Specific Columns
+        vec_cols = {
+            "Surname": lambda m: m.last_name,
+            "Given Names": lambda m: f"{m.first_name} {m.middle_name or ''}".strip(),
+            "Address": lambda m: f"{m.primary_address1} {m.primary_address2 or ''}".strip(),
+            "Suburb": lambda m: m.primary_city,
+            "Postcode": lambda m: m.primary_zip,
+            "Date of Birth": lambda m: getattr(m, "_export_dob", None) or "", 
+            "Phone": lambda m: m.phone or m.mobile or ""
+        }
+        
+        # AEC Specific Columns
+        aec_cols = {
+            "MemberID": lambda m: str(m.nationbuilder_id),
+            "FirstName": lambda m: m.first_name,
+            "MiddleName": lambda m: m.middle_name or "",
+            "Surname": lambda m: m.last_name,
+            "AddressLine1": lambda m: m.primary_address1,
+            "AddressLine2": lambda m: m.primary_address2 or "",
+            "Locality": lambda m: m.primary_city,
+            "State": lambda m: m.primary_state,
+            "Postcode": lambda m: m.primary_zip
+        }
+
+        # Select columns based on format
+        if format == "nb":
+            final_cols = nb_cols
+            header = list(nb_cols.keys())
+        elif format == "vec":
+            final_cols = vec_cols
+            header = list(vec_cols.keys())
+        elif format == "aec":
+            final_cols = aec_cols
+            header = list(aec_cols.keys())
+        else:
+            # Standard CSV (default fallback if not nb)
+            selected_keys = columns if columns else standard_cols.keys()
+            selected_keys = [k for k in selected_keys if k in standard_cols]
+            final_cols = {k: standard_cols[k][1] for k in selected_keys}
+            header = [standard_cols[k][0] for k in selected_keys]
+        
+        # Header
+        yield ",".join(header) + "\n"
+        
         # Batch fetch
         limit = 1000
         offset = 0
         while True:
-            batch = query.offset(offset).limit(limit).all()
+            # Query needs distinct if we joined for filtering?
+            # apply_filters might induce joins, but we fetch Member entities.
+            # Distinct on Member.id is checking.
+            batch = query.distinct(Member.id).offset(offset).limit(limit).all()
             if not batch:
                 break
                 
+            # Bulk fetch DOB to avoid N+1 query issue
+            member_ids = [m.id for m in batch]
+            dob_map = {}
+            if member_ids:
+                matches = db.query(ERAMatch, ERARecord.date_of_birth).join(
+                    ERARecord, ERAMatch.era_record_id == ERARecord.id
+                ).filter(
+                    ERAMatch.member_id.in_(member_ids)
+                ).all()
+                
+                from collections import defaultdict
+                member_matches = defaultdict(list)
+                for match_obj, dob in matches:
+                    member_matches[match_obj.member_id].append((match_obj, dob))
+                
+                for m_id, m_list in member_matches.items():
+                    # Sort by overall_score descending to get the best match
+                    best_match = sorted(m_list, key=lambda x: (x[0].overall_score or 0), reverse=True)[0]
+                    dob_map[m_id] = best_match[1]
+                
             for member in batch:
+                # Pre-calculate export dob to prevent the property getter from querying
+                if member.check_results and member.check_results[-1].result in ["Pass", "Partial"]:
+                    member._export_dob = dob_map.get(member.id)
+                else:
+                    member._export_dob = None
+                    
                 row = []
-                if format == "vec" or format == "aec":
+                # Dict-based extractors (nb, vec, aec)
+                if format in ["nb", "vec", "aec"]:
                      for col_name, extractor in final_cols.items():
                         val = extractor(member)
                         val = str(val).replace('"', '""')
                         row.append(f'"{val}"')
                 else:
+                    # Tuple-based extractors (standard)
                     for k in selected_keys:
                         val = standard_cols[k][1](member)
-                        # Escape quotes
                         val = str(val).replace('"', '""')
                         row.append(f'"{val}"')
                 yield ",".join(row) + "\n"
             
             offset += limit
             
-    filename = f"aec_crm_export_{format}.csv"
-    response = StreamingResponse(iter_csv(query), media_type="text/csv")
+    # Filename Logic: YY-MM_AECResult_<RESULT>
+    date_str = datetime.now().strftime("%y-%m")
+    
+    result_str = "All"
+    if status:
+        if len(status) == 1:
+            result_str = status[0]
+        else:
+            result_str = "Filtered"
+            
+    filename = f"{date_str}_AECResult_{result_str}"
+    if format == "nb":
+        filename += "_NationBuilder" # Optional specific suffix? User asked for "YY-MM_AECResult_<RESULT>" specifically.
+        # User request: "YY-MM_AECResult_<RESULT>"
+        # so I should stick to that EXACTLY.
+        filename = f"{date_str}_AECResult_{result_str}"
+        
+    filename += ".csv"
+    
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    return StreamingResponse(iter_csv(query), media_type="text/csv", headers=headers)
     response.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return response
 
@@ -225,10 +330,10 @@ def export_members(
 def get_parties(db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     return db.query(Party).all()
 
-@router.get("", response_model=List[MemberResponse])
+@router.get("", response_model=PaginatedMemberResponse)
 def read_members(
     skip: int = 0, 
-    limit: int = 10000, 
+    limit: int = 20, 
     status: Optional[List[str]] = Query(None),
     state: str = "all",
     search: Optional[str] = None,
@@ -237,10 +342,57 @@ def read_members(
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_active_user)
 ):
-    query = db.query(Member)
-    query = apply_filters(query, status, state, search, tags, tag_operator)
-    members = query.offset(skip).limit(limit).all()
-    return members
+    # Eager load relationships to avoid N+1 and ensure data exists
+    query = db.query(Member).options(
+        joinedload(Member.check_results),
+        joinedload(Member.tags),
+        joinedload(Member.party)
+    )
+    
+    # If search is present, we must do in-memory filtering for encrypted fields
+    if search:
+        # Apply strict SQL filters first (status, state, tags)
+        # Pass search=None to apply_filters to skip SQL-based searching
+        query = apply_filters(query, db, status, state, None, tags, tag_operator)
+        
+        # Fetch all candidates (distinct to avoid join duplicates)
+        candidates = query.distinct(Member.id).all()
+        
+        # Python-side fuzzy search on decrypted fields
+        search_lower = search.lower()
+        filtered_members = []
+        for m in candidates:
+            if (
+                search_lower in (m.first_name or "").lower() or
+                search_lower in (m.last_name or "").lower() or
+                search_lower in (m.email or "").lower() or
+                search_lower in (m.primary_address1 or "").lower() or
+                search_lower in (m.primary_city or "").lower() or
+                search_lower in (m.primary_zip or "") or
+                search_lower in (m.primary_state or "").lower() or
+                (str(m.nationbuilder_id) == search)
+            ):
+                filtered_members.append(m)
+        
+        total = len(filtered_members)
+        # In-memory pagination
+        members = filtered_members[skip : skip + limit]
+        
+    else:
+        # Standard SQL filtering and pagination
+        query = apply_filters(query, db, status, state, None, tags, tag_operator)
+        
+        # distinct() because joinedload might duplicate rows in result set for filtering
+        total = query.distinct(Member.id).count()
+        
+        members = query.offset(skip).limit(limit).all()
+    
+    return {
+        "members": members,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
 
 @router.get("/{member_id}", response_model=MemberResponse)
 def read_member(member_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
@@ -344,6 +496,25 @@ def check_member(member_id: int, background_tasks: BackgroundTasks, db: Session 
     
     browser_pool.enqueue_check(member_id)
     return {"status": "queued", "message": f"Check queued for member {member_id}"}
+
+@router.post("/{member_id}/reset-status")
+def reset_member_status(member_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    """
+    Clears all check results for a member, effectively resetting them to 'Unchecked' status.
+    Useful for clearing Failed or Captcha states to retry cleanly.
+    """
+    member = db.query(Member).filter(Member.id == member_id).first()
+    if member is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    
+    # Delete all check results for this member
+    db.query(CheckResult).filter(CheckResult.member_id == member_id).delete()
+    
+    # Also reset duplicate status if they want a fresh start? 
+    # Maybe optional, but for now let's just do check results as that's the main request.
+    
+    db.commit()
+    return {"message": "Member status reset to Unchecked"}
 
 @router.post("/upload")
 async def upload_members(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):

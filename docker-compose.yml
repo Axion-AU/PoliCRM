@@ -1,6 +1,24 @@
 version: "3.8"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: policrm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: policrm
+      POSTGRES_USER: policrm
+      POSTGRES_PASSWORD: policrm_dev_2024
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U policrm -d policrm"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   app:
     build: .
     ports:
@@ -8,10 +26,13 @@ services:
     volumes:
       - ./crm.db:/app/crm.db
       - ./.env:/app/.env
-      # Mount the firebase credentials if they exist
       - ./policrm-5f60f-firebase-adminsdk-fbsvc-c4a252e080.json:/app/policrm-5f60f-firebase-adminsdk-fbsvc-c4a252e080.json
     environment:
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://policrm:policrm_dev_2024@postgres:5432/policrm
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -19,3 +40,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+volumes:
+  postgres_data:

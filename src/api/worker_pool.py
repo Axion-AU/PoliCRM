@@ -1,31 +1,76 @@
 import threading
 import queue
 import time
+import random
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Set
 from sqlalchemy.orm import Session
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, func
 from .database import SessionLocal, retry_on_lock
 from .models import Member, CheckResult
 from aec_core.browser import get_driver, getAECStatus, AECResult
 from .rate_limiter import RateLimiter
+from .era_models import ERARecord, ERAUpload
+from .services.era import match_member_to_era, save_era_match, MATCH_THRESHOLD
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# State code mapping (ERA uses single letter codes)
+STATE_CODE_MAP = {
+    'VIC': 'V', 'V': 'V',
+    'NSW': 'N', 'N': 'N',
+    'QLD': 'Q', 'Q': 'Q',
+    'SA': 'S', 'S': 'S',
+    'WA': 'W', 'W': 'W',
+    'TAS': 'T', 'T': 'T',
+    'NT': 'D', 'D': 'D',
+    'ACT': 'A', 'A': 'A',
+}
+
+def get_era_available_states(db: Session) -> Set[str]:
+    """Get set of state codes that have ERA data loaded."""
+    states = db.query(ERARecord.enrolment_state).distinct().all()
+    # Return both single-letter and three-letter versions
+    result = set()
+    for (state,) in states:
+        if state:
+            result.add(state)
+            # Add reverse mapping
+            for full, code in STATE_CODE_MAP.items():
+                if code == state:
+                    result.add(full)
+    return result
+
+
 class BrowserPool:
-    def __init__(self, pool_size: int = 2, headless: bool = False):
-        self.pool_size = pool_size
+    """
+    Verification pool with split architecture:
+    - N ERA workers: Fast, parallel database lookups
+    - 1 Browser worker: Slow, rate-limited browser fallback with anti-CAPTCHA measures
+    """
+    
+    def __init__(self, era_workers: int = 4, headless: bool = False):
+        self.era_worker_count = era_workers
         self.headless = headless
-        self.job_queue = queue.Queue()
-        self.drivers = []
-        self.threads = []
-        self.running = False
+        
+        # Queues
+        self.era_queue = queue.Queue()  # Main queue for ERA lookups
+        self.browser_queue = queue.Queue()  # Fallback queue for browser checks
+        
+        # Workers
+        self.era_threads = []
+        self.browser_thread = None
+        self.driver = None
+        
         self.running = False
         self.driver_lock = threading.Lock()
-        # Initialize rate limiter (100/hr, 2000/day)
-        self.rate_limiter = RateLimiter(max_per_hour=100, max_per_day=2000)
+        
+        # Rate limiter for browser (reduced to avoid CAPTCHA)
+        self.rate_limiter = RateLimiter(max_per_hour=40, max_per_day=500)
+        
+        # Tracking
         self.queued_items = set()
         self.worker_status = {}
         self.worker_last_activity = {}
@@ -35,8 +80,10 @@ class BrowserPool:
     def start(self):
         """Start the worker threads."""
         self.running = True
-        for i in range(self.pool_size):
-            t = threading.Thread(target=self._worker_loop, args=(i,), daemon=True)
+        
+        # Start ERA workers (fast, parallel)
+        for i in range(self.era_worker_count):
+            t = threading.Thread(target=self._era_worker_loop, args=(i,), daemon=True)
             t.start()
             self.threads.append(t)
         
@@ -49,9 +96,13 @@ class BrowserPool:
     def stop(self):
         """Stop the worker threads and close drivers."""
         self.running = False
-        # Unblock queues
-        for _ in range(self.pool_size):
-            self.job_queue.put(None)
+        
+        # Unblock ERA queues
+        for _ in range(self.era_worker_count):
+            self.era_queue.put(None)
+        
+        # Unblock browser queue
+        self.browser_queue.put(None)
         
         for t in self.threads:
             t.join()
@@ -60,39 +111,124 @@ class BrowserPool:
             self.watchdog_thread.join()
         
         with self.driver_lock:
-            for driver in self.drivers:
+            if self.driver:
                 try:
-                    driver.quit()
+                    self.driver.quit()
                 except Exception:
                     pass
-            self.drivers = []
-        logger.info("Browser pool stopped")
+                self.driver = None
+        
+        logger.info("Verification pool stopped")
 
     def enqueue_check(self, member_id: int):
-        """Add a check job to the queue."""
+        """Add a check job to the ERA queue."""
         if member_id in self.queued_items:
             return
             
         self.queued_items.add(member_id)
-        self.job_queue.put(member_id)
+        self.era_queue.put(member_id)
         logger.debug(f"Enqueued check for member {member_id}")
 
     def _init_driver(self):
-        """Initialize a single driver."""
+        """Initialize a browser driver with anti-detection measures."""
         try:
             driver = get_driver(headless=self.headless)
             driver.get("https://check.aec.gov.au/")
+            time.sleep(2)  # Let page load fully
             return driver
         except Exception as e:
             logger.error(f"Failed to initialize driver: {e}")
             return None
 
-    def _worker_loop(self, worker_id: int):
-        """Main loop for each worker thread."""
+    def _era_worker_loop(self, worker_id: int):
+        """Fast ERA-only worker loop."""
+        worker_name = f"era_{worker_id}"
+        self.worker_status[worker_name] = {"status": "idle", "member_id": None, "member_name": None, "type": "era"}
+        self.worker_last_activity[worker_name] = time.time()
+        
+        while self.running:
+            try:
+                member_id = self.era_queue.get(timeout=1)
+                if member_id is None:
+                    break
+            except queue.Empty:
+                continue
+
+            db = None
+            try:
+                db = SessionLocal()
+                member = db.query(Member).filter(Member.id == member_id).first()
+                
+                if not member:
+                    logger.error(f"ERA Worker {worker_id}: Member {member_id} not found")
+                    continue
+
+                self.worker_status[worker_name] = {
+                    "status": "checking",
+                    "member_id": member.id,
+                    "member_name": f"{member.first_name} {member.last_name}",
+                    "type": "era"
+                }
+                self.worker_last_activity[worker_name] = time.time()
+
+                # Check if ERA data is available for this member's state
+                member_state = (member.primary_state or "").upper()
+                era_states = get_era_available_states(db)
+                use_era = member_state in era_states
+                
+                if use_era:
+                    # ERA matching
+                    era_result = match_member_to_era(db, member, threshold=MATCH_THRESHOLD)
+                    
+                    if era_result and era_result.overall_score >= MATCH_THRESHOLD:
+                        # ERA match found - save it
+                        save_era_match(db, member.id, era_result)
+                        
+                        # Create CheckResult from ERA data
+                        result_status = "Pass" if era_result.overall_score >= 90 else "Partial"
+                        result = CheckResult(
+                            member_id=member.id,
+                            result=result_status,
+                            federal_division=era_result.federal_division,
+                            state_division=era_result.state_district,
+                            local_government=era_result.local_government_area,
+                            verification_method='era'
+                        )
+                        self._save_result(db, result)
+                        logger.info(f"ERA Worker {worker_id}: Match for member {member_id}: {era_result.overall_score}% -> {result_status}")
+                        self.worker_status[worker_name] = {"status": "idle", "member_id": None, "member_name": None, "type": "era"}
+                        self.worker_last_activity[worker_name] = time.time()
+                        continue  # Done with this member
+                
+                # No ERA match or no ERA data - fall back to browser
+                logger.info(f"ERA Worker {worker_id}: No ERA match for member {member_id}, routing to browser queue")
+                self.browser_queue.put(member_id)
+                # Don't remove from queued_items yet - browser will handle that
+                self.worker_status[worker_name] = {"status": "idle", "member_id": None, "member_name": None, "type": "era"}
+                self.worker_last_activity[worker_name] = time.time()
+
+            except Exception as e:
+                logger.error(f"ERA Worker {worker_id} error: {e}")
+                # Put back in queue for retry
+                self.era_queue.put(member_id)
+            finally:
+                if db:
+                    db.close()
+                self.era_queue.task_done()
+        
+        if worker_name in self.worker_status:
+            del self.worker_status[worker_name]
+
+    def _browser_worker_loop(self):
+        """Single browser worker with anti-CAPTCHA measures."""
+        worker_name = "browser_0"
+        self.worker_status[worker_name] = {"status": "idle", "member_id": None, "member_name": None, "type": "browser"}
+        self.worker_last_activity[worker_name] = time.time()
+        
         driver = self._init_driver()
         if driver:
             with self.driver_lock:
-                self.drivers.append(driver)
+                self.driver = driver
         
         logger.info(f"Worker {worker_id} ready")
         self.worker_status[worker_id] = {"status": "idle", "member_id": None, "member_name": None}
@@ -100,26 +236,31 @@ class BrowserPool:
 
         while self.running:
             try:
-                member_id = self.job_queue.get(timeout=1)
+                member_id = self.browser_queue.get(timeout=1)
                 if member_id is None:
                     break
             except queue.Empty:
                 continue
 
-            # Wait for rate limit before processing
+            # Rate limit
             self.rate_limiter.wait_until_can_proceed()
+            
+            # Anti-CAPTCHA: Random delay before each check
+            delay = random.uniform(self.min_delay, self.max_delay)
+            logger.debug(f"Browser Worker: Waiting {delay:.1f}s before check (anti-CAPTCHA)")
+            time.sleep(delay)
 
+            db = None
             try:
-                # Create a new DB session for this job
                 db = SessionLocal()
                 member = db.query(Member).filter(Member.id == member_id).first()
                 
                 if not member:
-                    logger.error(f"Member {member_id} not found")
+                    logger.error(f"Browser Worker: Member {member_id} not found")
                     continue
 
-                logger.info(f"Worker {worker_id} checking member {member.first_name} {member.last_name}")
-                self.worker_status[worker_id] = {
+                logger.info(f"Browser Worker: Checking {member.first_name} {member.last_name}")
+                self.worker_status[worker_name] = {
                     "status": "checking",
                     "member_id": member.id,
                     "member_name": f"{member.first_name} {member.last_name}"
@@ -127,7 +268,6 @@ class BrowserPool:
                 self.worker_last_activity[worker_id] = time.time()
 
                 # Prepare data for getAECStatus
-                # It expects a dict with specific keys
                 member_dict = {
                     "first_name": member.first_name,
                     "middle_name": member.middle_name,
@@ -141,24 +281,9 @@ class BrowserPool:
                     "primary_zip": member.primary_zip,
                 }
 
-                # Check if driver is alive
-                try:
-                    driver.current_url
-                except Exception:
-                    logger.warning(f"Worker {worker_id} driver died, restarting...")
-                    try:
-                        driver.quit()
-                    except:
-                        pass
-                    driver = self._init_driver()
-                    if not driver:
-                        logger.error(f"Worker {worker_id} failed to restart driver")
-                        self.job_queue.put(member_id) # Re-queue
-                        time.sleep(5)
-                        continue
-
-                # Run the check
+                # Run the browser check
                 status = getAECStatus(driver, member_dict)
+                checks_since_refresh += 1
                 
                 # Save result
                 result = CheckResult(
@@ -177,26 +302,28 @@ class BrowserPool:
                 self.worker_last_activity[worker_id] = time.time()
 
             except Exception as e:
-                logger.error(f"Worker {worker_id} error: {e}")
+                logger.error(f"Browser Worker error: {e}")
             finally:
-                db.close()
+                if db:
+                    db.close()
                 self.queued_items.discard(member_id)
-                self.job_queue.task_done()
+                self.browser_queue.task_done()
         
-        # Cleanup this worker's driver
+        # Cleanup
         if driver:
             try:
                 driver.quit()
             except:
                 pass
         
-        if worker_id in self.worker_status:
-            del self.worker_status[worker_id]
+        if worker_name in self.worker_status:
+            del self.worker_status[worker_name]
 
     def get_status(self):
         """Get the current status of the pool."""
         return {
-            "queue_size": self.job_queue.qsize(),
+            "era_queue_size": self.era_queue.qsize(),
+            "browser_queue_size": self.browser_queue.qsize(),
             "queued_items": list(self.queued_items),
             "workers": self.worker_status,
             "pool_size": self.pool_size

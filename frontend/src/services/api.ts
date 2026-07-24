@@ -174,3 +174,32 @@ export const analyticsApi = {
     return request("/analytics/summary");
   },
 };
+
+/* ─── Stats API ─────────────────────────────────────────────────────────── */
+export interface StatsDashboard {
+  total_members: number;
+  active_members: number;
+  lapsed_members: number;
+  verified_count: number;
+  failed_count: number;
+  partial_match_count: number;
+  captcha_count: number;
+  unchecked_count: number;
+  duplicate_count: number;
+  new_members_30d: number;
+  by_state: Record<string, number>;
+}
+
+export interface ElectorateStat {
+  federal_division: string;
+  count: number;
+}
+
+export const statsApi = {
+  dashboard(): Promise<StatsDashboard> {
+    return request<StatsDashboard>("/stats/dashboard");
+  },
+  electorates(): Promise<ElectorateStat[]> {
+    return request<ElectorateStat[]>("/stats/electorates");
+  },
+};

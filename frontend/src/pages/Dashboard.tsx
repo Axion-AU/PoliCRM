@@ -1,20 +1,35 @@
+import { PageHeader } from "../components/PageHeader";
+import { MembershipBadge, type MembershipStatus } from "../components/MembershipBadge";
+import { analyticsApi, personsApi, importApi, statsApi, type ImportJob, type Person, type StatsDashboard } from "../services/api";
+import { MemberDetailDrawer } from "../components/MemberDetailDrawer";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   Users,
-  MapPin,
   Upload,
-  Clock,
   ChevronRight,
   ChevronDown,
   CheckSquare,
   Square,
   ArrowRight,
+  ShieldCheck,
+  UserX,
 } from "lucide-react";
-import { PageHeader } from "../components/PageHeader";
-import { MembershipBadge, type MembershipStatus } from "../components/MembershipBadge";
-import { analyticsApi, personsApi, importApi } from "../services/api";
-import type { ImportJob, Person } from "../services/api";
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip as RechartsTooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  AreaChart,
+  Area,
+  Legend,
+} from "recharts";
 
 /* ─── Phase 1 checklist ─────────────────────────────────────────────────── */
 const PHASE1_ITEMS = [
@@ -49,6 +64,30 @@ const MOCK_IMPORTS: ImportJob[] = [
 
 const MOCK_SUMMARY = { total_persons: 12847, states_covered: 7, imports_total: 24, last_import_at: "2025-11-25T02:18:00Z" };
 
+const MOCK_STATS: StatsDashboard = {
+  total_members: 12847,
+  active_members: 10420,
+  lapsed_members: 2427,
+  verified_count: 8943,
+  failed_count: 1240,
+  partial_match_count: 984,
+  captcha_count: 160,
+  unchecked_count: 1520,
+  duplicate_count: 324,
+  new_members_30d: 482,
+  by_state: { NSW: 4890, VIC: 3820, QLD: 1980, WA: 1120, SA: 820, TAS: 180, ACT: 28, NT: 9 }
+};
+
+const MOCK_GROWTH = {
+  "2025-11": 1520,
+  "2025-12": 1840,
+  "2026-01": 2100,
+  "2026-02": 2480,
+  "2026-03": 3120,
+  "2026-04": 3890,
+  "2026-05": 4820,
+};
+
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 function timeAgo(iso?: string): string {
   if (!iso) return "Never";
@@ -69,7 +108,7 @@ function fmtDate(iso: string): string {
 function jobStatusColor(s: ImportJob["status"]): string {
   return s === "complete" ? "var(--status-active)" :
          s === "failed"   ? "var(--status-suspended)" :
-         s === "running"  ? "var(--ops-blue)" : "var(--slate-muted)";
+         s === "running"  ? "var(--civic-teal)" : "var(--slate-muted)";
 }
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
@@ -82,42 +121,102 @@ export default function Dashboard() {
   }>(MOCK_SUMMARY);
   const [members, setMembers] = useState<typeof MOCK_RECENT>(MOCK_RECENT);
   const [imports, setImports] = useState<ImportJob[]>(MOCK_IMPORTS);
+  const [stats, setStats] = useState<StatsDashboard>(MOCK_STATS);
+  const [growth, setGrowth] = useState<Record<string, number>>(MOCK_GROWTH);
+  const [selectedState, setSelectedState] = useState<string>("ALL");
   const [phaseOpen, setPhaseOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   useEffect(() => {
-    analyticsApi.summary()
-      .then(setSummary)
-      .catch((err: unknown) => {
-        console.error("analyticsApi.summary failed:", (err instanceof Error ? err.message : err));
-      });
-    personsApi.list({ limit: 8 })
-      .then((p) => setMembers(
-        (p.data ?? []).map((m) => ({ ...m, membership_status: "active" as MembershipStatus }))
-      ))
-      .catch((err: unknown) => {
-        console.error("personsApi.list failed:", (err instanceof Error ? err.message : err));
-        setMembers([]);
-      });
-    importApi.list()
-      .then(setImports)
-      .catch((err: unknown) => {
-        console.error("importApi.list failed:", (err instanceof Error ? err.message : err));
-        setImports([]);
-      });
+    const fetchDashboardData = async () => {
+      try {
+        const [sumRes, memRes, impRes, statRes, growthRes] = await Promise.allSettled([
+          analyticsApi.summary(),
+          personsApi.list({ limit: 5 }),
+          importApi.list(),
+          statsApi.dashboard(),
+          analyticsApi.growth(),
+        ]);
+
+        if (sumRes.status === "fulfilled") setSummary(sumRes.value);
+        if (memRes.status === "fulfilled" && memRes.value.data?.length) {
+          setMembers(
+            memRes.value.data.map((m) => ({ ...m, membership_status: "active" as MembershipStatus }))
+          );
+        }
+        if (impRes.status === "fulfilled") setImports(impRes.value);
+        if (statRes.status === "fulfilled") setStats(statRes.value);
+        if (growthRes.status === "fulfilled" && Object.keys(growthRes.value).length) setGrowth(growthRes.value);
+      } catch (err) {
+        console.error("Error loading dashboard metrics:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
   }, []);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--canvas)" }}>
+        <div className="animate-spin-slow" style={{ width: 28, height: 28 }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--civic-teal)" strokeWidth="2.5">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+        </div>
+      </div>
+    );
+  }
 
   const doneCount = PHASE1_ITEMS.filter((i) => i.done).length;
   const totalCount = PHASE1_ITEMS.length;
 
+  // Chart data preparations
+  const aecBreakdownData = [
+    { name: "Pass", value: stats.verified_count, color: "var(--status-active)" },
+    { name: "Partial", value: stats.partial_match_count, color: "var(--status-lapsed)" },
+    { name: "Fail", value: stats.failed_count, color: "var(--status-suspended)" },
+    { name: "Captcha", value: stats.captcha_count, color: "#2dd4bf" },
+    { name: "Unchecked", value: stats.unchecked_count, color: "var(--slate-muted)" },
+  ];
+
+  const stateChartData = Object.entries(stats.by_state)
+    .map(([state, count]) => ({ state, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const growthChartData = Object.entries(growth).map(([month, count]) => ({
+    month,
+    members: count,
+  }));
+
+  const passRate = stats.total_members > 0 
+    ? ((stats.verified_count / stats.total_members) * 100).toFixed(1)
+    : "0.0";
+
   return (
-    <div className="page-content" style={{ padding: "32px 40px" }}>
+    <div className="page-content" style={{ padding: "32px 40px", maxWidth: "1600px", margin: "0 auto" }}>
       <PageHeader
-        title="Dashboard"
+        title="CRM Dashboard"
         subtitle={`Last import ${timeAgo(summary.last_import_at)}`}
         action={
-          <Link to="/app/import" className="btn-primary">
-            Import Members <ArrowRight size={14} strokeWidth={2.5} />
-          </Link>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <select
+              className="select-base"
+              value={selectedState}
+              onChange={(e) => setSelectedState(e.target.value)}
+              style={{ padding: "8px 32px 8px 12px" }}
+            >
+              <option value="ALL">All States</option>
+              {Object.keys(stats.by_state).map((st) => (
+                <option key={st} value={st}>{st}</option>
+              ))}
+            </select>
+            <Link to="/app/import" className="btn-primary" style={{ padding: "8px 16px" }}>
+              Import Members <ArrowRight size={14} strokeWidth={2.5} />
+            </Link>
+          </div>
         }
       />
 
@@ -125,45 +224,197 @@ export default function Dashboard() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 0,
-          background: "var(--canvas-raised)",
-          border: "1px solid var(--console-border)",
-          borderRadius: 12,
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gap: 16,
           marginBottom: 32,
-          overflow: "hidden",
         }}
       >
         {[
-          { icon: Users,  label: "Members",         value: summary.total_persons.toLocaleString("en-AU") },
-          { icon: MapPin, label: "States Covered",  value: `${summary.states_covered}/8` },
-          { icon: Upload, label: "Imports Run",     value: summary.imports_total.toLocaleString("en-AU") },
-          { icon: Clock,  label: "Last Import",     value: timeAgo(summary.last_import_at) },
-        ].map(({ icon: Icon, label, value }, i) => (
+          {
+            icon: Users,
+            label: "Total Members",
+            value: stats.total_members.toLocaleString("en-AU"),
+            sub: `+${stats.new_members_30d} in last 30d`,
+            color: "var(--civic-teal)",
+          },
+          {
+            icon: ShieldCheck,
+            label: "AEC Verified Rate",
+            value: `${passRate}%`,
+            sub: `${stats.verified_count.toLocaleString("en-AU")} validated`,
+            color: "var(--status-active)",
+          },
+          {
+            icon: Upload,
+            label: "Imports Executed",
+            value: summary.imports_total.toString(),
+            sub: "NationBuilder sync active",
+            color: "var(--status-lapsed)",
+          },
+          {
+            icon: UserX,
+            label: "Unchecked Records",
+            value: stats.unchecked_count.toLocaleString("en-AU"),
+            sub: "Requires compliance verification",
+            color: "var(--status-suspended)",
+          },
+        ].map(({ icon: Icon, label, value, sub, color }) => (
           <div
             key={label}
+            className="transition-base"
             style={{
-              padding: "24px 28px",
-              borderRight: i < 3 ? "1px solid var(--console-border)" : "none",
+              padding: "24px",
+              background: "var(--canvas-raised)",
+              border: "1px solid var(--console-border)",
+              borderRadius: 16,
+              position: "relative",
+              overflow: "hidden",
             }}
           >
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 7,
+                gap: 8,
                 marginBottom: 12,
               }}
             >
-              <Icon size={14} strokeWidth={2} style={{ color: "var(--slate-muted)" }} />
-              <span className="stat-label">{label}</span>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: `${color}15`,
+                  color: color,
+                }}
+              >
+                <Icon size={16} strokeWidth={2.5} />
+              </div>
+              <span className="stat-label" style={{ fontSize: 12 }}>{label}</span>
             </div>
-            <div className="stat-value">{value}</div>
+            <div className="stat-value" style={{ fontSize: 32, fontWeight: 600 }}>{value}</div>
+            <div style={{ fontSize: 12, color: "var(--slate-muted)", marginTop: 6 }}>{sub}</div>
           </div>
         ))}
       </div>
 
-      {/* ── Two-column content ───────────────────────────────────────── */}
+      {/* ── Analytics Visual Section ─────────────────────────────────── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(450px, 1fr))",
+          gap: 24,
+          marginBottom: 32,
+        }}
+      >
+        {/* Pie: AEC Breakdown */}
+        <div
+          style={{
+            background: "var(--canvas-raised)",
+            border: "1px solid var(--console-border)",
+            borderRadius: 16,
+            padding: 24,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--navy)" }}>AEC Verification status</h3>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--slate-muted)" }}>Compliance</span>
+          </div>
+          <div style={{ flex: 1, minHeight: 280, display: "flex", alignItems: "center" }}>
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie
+                  data={aecBreakdownData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={65}
+                  outerRadius={90}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {aecBreakdownData.map((entry, idx) => (
+                    <Cell key={`cell-${idx}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <RechartsTooltip
+                  contentStyle={{ background: "rgba(15,23,42,0.96)", border: "1px solid var(--console-border)", borderRadius: 8 }}
+                  itemStyle={{ color: "#f8fafc", fontSize: 13 }}
+                  labelStyle={{ display: "none" }}
+                />
+                <Legend iconSize={10} layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 13 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Bar: State distribution */}
+        <div
+          style={{
+            background: "var(--canvas-raised)",
+            border: "1px solid var(--console-border)",
+            borderRadius: 16,
+            padding: 24,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--navy)" }}>Members by State</h3>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--slate-muted)" }}>Demographics</span>
+          </div>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={stateChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--console-border)" vertical={false} />
+              <XAxis dataKey="state" stroke="var(--slate-muted)" style={{ fontSize: 11 }} />
+              <YAxis stroke="var(--slate-muted)" style={{ fontSize: 11 }} />
+              <RechartsTooltip
+                contentStyle={{ background: "rgba(15,23,42,0.96)", border: "1px solid var(--console-border)", borderRadius: 8 }}
+                itemStyle={{ color: "#f8fafc", fontSize: 13 }}
+              />
+              <Bar dataKey="count" fill="var(--civic-teal)" radius={[4, 4, 0, 0]} barSize={36} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ── Growth Line Chart ────────────────────────────────────────── */}
+      <div
+        style={{
+          background: "var(--canvas-raised)",
+          border: "1px solid var(--console-border)",
+          borderRadius: 16,
+          padding: 24,
+          marginBottom: 32,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--navy)" }}>Membership Growth Trend</h3>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--slate-muted)" }}>Growth Over Time</span>
+        </div>
+        <ResponsiveContainer width="100%" height={240}>
+          <AreaChart data={growthChartData}>
+            <defs>
+              <linearGradient id="colorGrowth" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--civic-teal)" stopOpacity={0.15}/>
+                <stop offset="95%" stopColor="var(--civic-teal)" stopOpacity={0.0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--console-border)" vertical={false} />
+            <XAxis dataKey="month" stroke="var(--slate-muted)" style={{ fontSize: 11 }} />
+            <YAxis stroke="var(--slate-muted)" style={{ fontSize: 11 }} />
+            <RechartsTooltip
+              contentStyle={{ background: "rgba(15,23,42,0.96)", border: "1px solid var(--console-border)", borderRadius: 8 }}
+              itemStyle={{ color: "#f8fafc", fontSize: 13 }}
+            />
+            <Area type="monotone" dataKey="members" stroke="var(--civic-teal)" strokeWidth={2.5} fillOpacity={1} fill="url(#colorGrowth)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* ── Grid: Members, Imports, Checklist ───────────────────────── */}
       <div
         style={{
           display: "grid",
@@ -184,10 +435,10 @@ export default function Dashboard() {
           >
             <h2
               style={{
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif",
                 fontWeight: 700,
                 fontSize: 15,
-                color: "oklch(19% 0.03 260)",
+                color: "var(--navy)",
                 margin: 0,
               }}
             >
@@ -201,7 +452,7 @@ export default function Dashboard() {
                 gap: 4,
                 fontSize: 12.5,
                 fontWeight: 600,
-                color: "var(--ops-blue)",
+                color: "var(--civic-teal)",
               }}
             >
               View all <ChevronRight size={13} strokeWidth={2.5} />
@@ -229,20 +480,26 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {members.map((m) => (
-                  <tr key={m.id}>
-                    <td>
-                      <span style={{ fontWeight: 500, color: "oklch(22% 0.03 260)" }}>
-                        {m.given_name} {m.surname}
-                      </span>
-                    </td>
-                    <td style={{ color: "var(--slate-muted)" }}>{m.primary_state ?? "—"}</td>
-                    <td style={{ color: "var(--slate-muted)" }}>{fmtDate(m.created_at)}</td>
-                    <td>
-                      <MembershipBadge status={m.membership_status} />
-                    </td>
-                  </tr>
-                ))}
+                {members
+                  .filter((m) => selectedState === "ALL" || m.primary_state === selectedState)
+                  .map((m) => (
+                    <tr
+                      key={m.id}
+                      onClick={() => setSelectedMemberId(m.id)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <td>
+                        <span style={{ fontWeight: 500, color: "var(--navy)" }}>
+                          {m.given_name} {m.surname}
+                        </span>
+                      </td>
+                      <td style={{ color: "var(--slate-muted)" }}>{m.primary_state ?? "—"}</td>
+                      <td style={{ color: "var(--slate-muted)" }}>{fmtDate(m.created_at)}</td>
+                      <td>
+                        <MembershipBadge status={m.membership_status} />
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -254,10 +511,10 @@ export default function Dashboard() {
           <section>
             <h2
               style={{
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif",
                 fontWeight: 700,
                 fontSize: 15,
-                color: "oklch(19% 0.03 260)",
+                color: "var(--navy)",
                 margin: "0 0 12px",
               }}
             >
@@ -290,7 +547,7 @@ export default function Dashboard() {
                       style={{
                         fontSize: 12.5,
                         fontWeight: 500,
-                        color: "oklch(22% 0.03 260)",
+                        color: "var(--navy)",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -353,10 +610,10 @@ export default function Dashboard() {
               <div>
                 <div
                   style={{
-                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                    fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif",
                     fontWeight: 700,
                     fontSize: 13.5,
-                    color: "oklch(19% 0.03 260)",
+                    color: "var(--navy)",
                   }}
                 >
                   Phase 1 Progress
@@ -380,7 +637,7 @@ export default function Dashboard() {
                     style={{
                       height: "100%",
                       width: `${(doneCount / totalCount) * 100}%`,
-                      background: "var(--ops-blue)",
+                      background: "var(--civic-teal)",
                       borderRadius: 99,
                     }}
                   />
@@ -447,6 +704,13 @@ export default function Dashboard() {
           </section>
         </div>
       </div>
+
+      {/* Drawer */}
+      <MemberDetailDrawer
+        memberId={selectedMemberId}
+        onClose={() => setSelectedMemberId(null)}
+        fallbackMember={members.find((m) => m.id === selectedMemberId)}
+      />
     </div>
   );
 }

@@ -14,18 +14,18 @@ export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
         gap: 24,
         marginBottom: 32,
         paddingBottom: 24,
-        borderBottom: "1px solid var(--console-border)",
+        borderBottom: "1px solid var(--seam)",
       }}
     >
       <div>
         <h1
           style={{
-            fontFamily: "'Plus Jakarta Sans', sans-serif",
-            fontWeight: 800,
+            fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif",
+            fontWeight: 600,
             fontSize: 24,
-            color: "oklch(19% 0.03 260)",
+            color: "var(--slate)",
             margin: 0,
-            letterSpacing: "-0.015em",
+            letterSpacing: "-0.01em",
           }}
         >
           {title}
@@ -34,7 +34,9 @@ export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
           <p
             style={{
               margin: "4px 0 0",
-              fontSize: 13.5,
+              fontFamily: "'IBM Plex Sans', ui-sans-serif, sans-serif",
+              fontSize: 13,
+              fontWeight: 300,
               color: "var(--slate-muted)",
               lineHeight: 1.5,
             }}

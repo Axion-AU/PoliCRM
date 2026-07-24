@@ -2,17 +2,12 @@
 
 ## Project Overview
 
-Briefly describe:
-
-- What this project is
-- Why it exists
-- Who it serves
-- Current maturity level (prototype, MVP, production, etc.)
-
-Example:
-
 > This project is a lightweight CRM and campaign operations platform designed for political and community organizations.  
 > Priorities are reliability, operator speed, maintainability, and minimizing admin overhead.
+
+There is an active rewrite of the backend codebase from Python to Rust. Please refer to the Rust rewrite plan for more information on the backend rewrite.
+If you are working on a feature, do not propose changes to the python backend codebase, unless it is to fix a bug in production code that hasn't been migrated to Rust.
+All new backend code should be written in Rust, unless there is a strong reason to use Python. If there is a strong reason to use Python, please make it clear why and get approval from the user first.
 
 ---
 

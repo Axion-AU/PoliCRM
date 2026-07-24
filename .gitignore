@@ -155,3 +155,9 @@ backend-rs/crm.db-journal
 # Vite cache
 frontend/.vite/
 .vite/
+
+gnaf_incoming
+
+gnaf_incoming.zip
+
+policrm_addresses.db

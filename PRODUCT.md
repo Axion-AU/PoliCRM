@@ -5,29 +5,38 @@
 product
 
 ## Users
-Organizers, campaign managers, compliance officers, and volunteers of Australian political parties who need to manage lists of members, verify voter enrollment details against the Australian Electoral Commission (AEC), and visualize voter density for campaign targeting.
+
+Party administrators, campaign managers, compliance officers, and technical evaluators in Australian political parties and grassroots organisations. They use PoliCRM under deadline pressure to manage member lists, verify electoral roll enrollment against the AEC, and track campaign readiness. They need clarity, density, and zero confusion — they are operating, not browsing.
 
 ## Product Purpose
-Automate member registration validation, clean address databases, and track campaign readiness. PoliCRM provides real-time AEC validation background worker status, detailed member status tracking, electoral maps (War Room), and compliance-ready data exports to secure or maintain official party registration.
+
+PoliCRM is a member management and electoral contact system purpose-built for electoral context. It ingests member data, automates AEC validation background checks, surfaces engagement signals, handles Electoral Roll Access integration, and produces compliance-ready data exports. It tracks people, surfaces what matters, and keeps teams moving under pressure. Built to absorb chaos and return structure.
 
 ## Brand Personality
-- **Voice/Tone**: Bold, authoritative, secure, high-efficiency.
-- **Personality**: Campaign-ready political operations center. Modern agency style meets rock-solid data integrity.
-- **Emotional Goals**: Urgency, absolute confidence in compliance, and operational command.
+
+- **Voice/Tone**: Direct, operational, honest about electoral context. Describes what it does — no campaign metaphors, no political stance.
+- **Personality**: Civic instrument. The tool you reach for when the stakes are real and the timeline is short. Serious, civic, precise.
+- **Emotional Goals**: Operational confidence, absolute trust in compliance, urgency without alarm.
 
 ## Anti-references
-- **Bootstrap/SaaS Slop**: Cluttered layouts, heavy cards inside cards, giant generic metric blocks, cheap gradients.
-- **Pure Monochromatic/Bland**: Default browser fonts and form inputs, flat un-tinted grays.
-- **Playful Web3/Consumer**: Excessive bouncy animations, floating pastel shapes, bubbly or unserious rounded features.
-- **AI Slop**: Obvious SRE-observability templates or generic CRM clones.
+
+- **Generic SaaS CRM**: Any design that could describe Salesforce without changing a word. Generic templates, SaaS-cream aesthetics.
+- **Bootstrap/SaaS Slop**: Cluttered layouts, nested cards, giant metric hero blocks, cheap gradients.
+- **Playful/Consumer**: Excessive animations, floating pastel shapes, bubbly rounded forms, unserious energy.
+- **Political branding**: Partisan red/blue colour schemes, campaign poster aesthetics — PoliCRM is always operator-side, never voter-facing.
+- **AI Slop**: Obvious SRE-observability templates, editorial-typographic reflexes, anything that reads as AI-generated at a glance.
 
 ## Design Principles
-1. **Command Center Urgency**: High-contrast, high-energy status states. Real-time updates should feel alive but controlled.
-2. **Dense Data Clarity**: Clean, highly readable tables with strong visual hierarchy. No wasted padding on critical workflows.
-3. **Tinted Integrity**: Every neutral shade is tinted toward the political brand hue (warm deep slate / navy mix), creating a customized premium feel that never uses pure black or generic dark blue.
-4. **Action-Driven Focus**: Clear pathways for import, bulk check, and export operations. Secondary actions are kept quiet.
+
+1. **Civic Instrument**: The interface should feel like official parliamentary documentation meets operational dashboard. Dense but legible. Information that earns its space.
+2. **Dense Data Clarity**: Compact, readable tables with strong visual hierarchy. Production views prioritise data. Generous spacing is for empty states and onboarding only.
+3. **Tinted Integrity**: All neutral surfaces carry a cool undertone tinted toward Civic Teal — never pure black, never pure white. Status colours are reserved strictly for status signalling.
+4. **Action-Driven Focus**: Clear pathways for import, verify, export, and bulk operations. Secondary actions are kept quiet. Copy lives close to the task.
+5. **Operational Speed**: Transitions are fast and functional (0.2s). Users are operating, not browsing. Nothing theatrical.
 
 ## Accessibility & Inclusion
+
 - **WCAG Level**: AA compliance.
-- **Color Independence**: Status tags (Pass, Partial, Fail, Captcha) must use distinct icons and text weight, not just color, to indicate validation results.
-- **Keyboard Friendliness**: Clear focus states for spreadsheet-like navigation of member lists.
+- **Color Independence**: Status tags (Active, Pending, Flagged, Inactive) use coloured dots plus IBM Plex Mono uppercase text — never colour alone — to signal state.
+- **Keyboard Friendliness**: Clear focus states for spreadsheet-like navigation of member lists and data tables.
+- **Reduced Motion**: Honour `prefers-reduced-motion`; skip background flashes and scale transitions.

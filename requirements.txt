@@ -15,3 +15,7 @@ firebase-admin
 cryptography
 python-dotenv
 requests
+rapidfuzz
+python-dateutil
+alembic
+psycopg2-binary

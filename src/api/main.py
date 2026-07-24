@@ -21,7 +21,8 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 from .database import engine, Base, SessionLocal
 from .models import User
 from .dependencies import browser_pool
-from .routers import members, tags, stats, users, views, integrations, analytics, searches, system
+from .routers import members, tags, stats, users, views, integrations, analytics, searches, system, era, websocket, db_viewer
+from . import era_models  # Import to register ERA tables
 from .services import daemon
 
 # Create tables
@@ -71,6 +72,9 @@ app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 app.include_router(searches.router, prefix="/searches", tags=["searches"])
 app.include_router(system.router, prefix="/system", tags=["system"])
+app.include_router(era.router, prefix="/era", tags=["era"])
+app.include_router(websocket.router, tags=["websocket"])
+app.include_router(db_viewer.router, prefix="/db", tags=["database"])
 
 try:
     app.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
@@ -82,6 +86,7 @@ except Exception as e:
 async def startup_event():
     browser_pool.start()
     daemon.start_daemon()
+    websocket.start_broadcaster()
     
     # Seed Initial Users
     db = SessionLocal()
@@ -120,4 +125,5 @@ async def startup_event():
 async def shutdown_event():
     daemon.stop_daemon()
     browser_pool.stop()
+    websocket.stop_broadcaster()
 

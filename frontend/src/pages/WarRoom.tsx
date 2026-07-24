@@ -204,9 +204,9 @@ export function WarRoom() {
     borderRadius: 6,
     border: "none",
     fontSize: 12.5,
-    fontWeight: 700,
+    fontWeight: 600,
     cursor: "pointer",
-    background: active ? (mode === "verified" ? "#16a34a" : mode === "projected" ? "#d97706" : "var(--ops-blue)") : "transparent",
+    background: active ? (mode === "verified" ? "#16a34a" : mode === "projected" ? "#d97706" : "var(--civic-teal)") : "transparent",
     color: active ? "#fff" : "oklch(60% 0.015 240)",
     transition: "background-color 150ms ease-out, color 150ms ease-out",
   });
@@ -227,8 +227,8 @@ export function WarRoom() {
       >
         <h1
           style={{
-            fontFamily: "'Plus Jakarta Sans', sans-serif",
-            fontWeight: 800,
+            fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif",
+            fontWeight: 600,
             fontSize: 18,
             color: "oklch(97% 0.006 240)",
             margin: 0,
@@ -267,7 +267,7 @@ export function WarRoom() {
         {loading ? (
           <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div className="animate-spin-slow" style={{ width: 32, height: 32 }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="var(--ops-blue)" strokeWidth="2.5">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--civic-teal)" strokeWidth="2.5">
                 <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
               </svg>
             </div>
@@ -288,7 +288,7 @@ export function WarRoom() {
                 backdropFilter: "blur(8px)",
               }}
             >
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "oklch(55% 0.015 240)", marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "oklch(55% 0.015 240)", marginBottom: 10 }}>
                 Legend
               </div>
               {[
@@ -332,7 +332,7 @@ export function WarRoom() {
                 { icon: Users,      label: "Members",      value: totalMembers.toLocaleString("en-AU"),  color: "oklch(97% 0.006 240)" },
                 { icon: Target,     label: "Verified",     value: totalVerified.toLocaleString("en-AU"), color: "#4ade80" },
                 { icon: TrendingUp, label: "Projected",    value: totalProjected.toLocaleString("en-AU"),color: "#fbbf24" },
-                { icon: BarChart3,  label: "Enrolment Rate", value: `${verRate}%`,                       color: "oklch(68% 0.22 260)" },
+                { icon: BarChart3,  label: "Enrolment Rate", value: `${verRate}%`,                       color: "#2dd4bf" },
               ].map(({ icon: Icon, label, value, color }) => (
                 <div
                   key={label}
@@ -344,10 +344,10 @@ export function WarRoom() {
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "oklch(50% 0.015 240)" }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "oklch(50% 0.015 240)" }}>{label}</span>
                     <Icon size={14} strokeWidth={2} style={{ color: "oklch(50% 0.015 240)" }} />
                   </div>
-                  <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 26, color, letterSpacing: "-0.02em" }}>
+                  <div style={{ fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif", fontWeight: 600, fontSize: 26, color, letterSpacing: "-0.02em" }}>
                     {value}
                   </div>
                 </div>
@@ -357,7 +357,7 @@ export function WarRoom() {
             {/* Growth chart */}
             {growthChartData.length > 0 && (
               <div style={{ background: "oklch(100% 0 0 / 0.04)", border: "1px solid var(--navy-border)", borderRadius: 12, padding: 20, marginBottom: 20 }}>
-                <h2 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, color: "oklch(90% 0.008 240)", margin: "0 0 16px" }}>
+                <h2 style={{ fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif", fontWeight: 600, fontSize: 14, color: "oklch(90% 0.008 240)", margin: "0 0 16px" }}>
                   Member Growth
                 </h2>
                 <ResponsiveContainer width="100%" height={240}>
@@ -379,7 +379,7 @@ export function WarRoom() {
               {/* State distribution */}
               {stateChartData.length > 0 && (
                 <div style={{ background: "oklch(100% 0 0 / 0.04)", border: "1px solid var(--navy-border)", borderRadius: 12, padding: 20 }}>
-                  <h2 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, color: "oklch(90% 0.008 240)", margin: "0 0 16px" }}>
+                  <h2 style={{ fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif", fontWeight: 600, fontSize: 14, color: "oklch(90% 0.008 240)", margin: "0 0 16px" }}>
                     Members by State
                   </h2>
                   <ResponsiveContainer width="100%" height={220}>
@@ -400,13 +400,13 @@ export function WarRoom() {
               {/* Top electorates */}
               {topElectorates.length > 0 && (
                 <div style={{ background: "oklch(100% 0 0 / 0.04)", border: "1px solid var(--navy-border)", borderRadius: 12, padding: 20 }}>
-                  <h2 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, color: "oklch(90% 0.008 240)", margin: "0 0 16px" }}>
+                  <h2 style={{ fontFamily: "'Sora', ui-sans-serif, system-ui, sans-serif", fontWeight: 600, fontSize: 14, color: "oklch(90% 0.008 240)", margin: "0 0 16px" }}>
                     Top 10 Electorates
                   </h2>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {topElectorates.map(([name, count], i) => (
                       <div key={name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "oklch(42% 0.015 260)", width: 20, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "oklch(42% 0.015 260)", width: 20, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
                           {String(i + 1).padStart(2, "0")}
                         </span>
                         <span style={{ flex: 1, fontSize: 13, color: "oklch(80% 0.01 240)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

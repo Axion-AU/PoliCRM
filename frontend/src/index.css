@@ -5,44 +5,57 @@
 /* ─── Design Tokens ──────────────────────────────────────────────────────── */
 @layer base {
   :root {
-    /* OKLCH palette — PoliCRM */
-    --ops-blue:        oklch(52% 0.22 260);   /* Operations Blue #3553eb */
-    --ops-blue-hover:  oklch(48% 0.22 260);   /* Hover state */
-    --canvas:          oklch(98.5% 0.006 240); /* Tinted Canvas #f8fafc */
-    --canvas-raised:   oklch(99.5% 0.003 240); /* Card surfaces */
-    --navy:            oklch(19% 0.03 260);    /* Console Navy #0f172a */
-    --navy-muted:      oklch(25% 0.025 260);   /* Sidebar active bg */
-    --navy-border:     oklch(32% 0.025 260);   /* Sidebar dividers */
-    --slate-muted:     oklch(54% 0.02 250);    /* Secondary text */
-    --console-border:  oklch(93% 0.01 250);    /* Layout borders */
+    /* ── Civic Teal (sole accent) ────────────────────────── */
+    --civic-teal:        #0D9488;
+    --civic-teal-hover:  #0f766e;
+    --teal-wash:         rgba(13, 148, 136, 0.08);
+    --teal-tint:         rgba(13, 148, 136, 0.15);
 
-    /* Membership status */
-    --status-active:   oklch(62% 0.17 145);   /* Green */
-    --status-lapsed:   oklch(75% 0.15 70);    /* Amber */
-    --status-resigned: oklch(54% 0.02 250);   /* Slate */
-    --status-suspended:oklch(58% 0.22 25);    /* Red */
+    /* ── Foundation ──────────────────────────────────────── */
+    --canvas:            #F0F2F4;   /* Slate Ground — primary bg */
+    --canvas-raised:     #FFFFFF;   /* Cards, panels, modals */
+    --mist:              #E4E8EC;   /* Recessed areas, table stripes */
+    --seam:              rgba(15, 23, 42, 0.10); /* Dividers, card borders */
 
-    /* Tailwind HSL aliases */
-    --background:           210 40% 98%;
-    --foreground:           222 47% 11%;
-    --card:                 0 0% 99.5%;
+    /* ── Ink ─────────────────────────────────────────────── */
+    --slate:             #0F172A;   /* Primary text */
+    --slate-mid:         #334155;   /* Secondary text */
+    --slate-muted:       #64748B;   /* Captions, metadata */
+    --slate-faint:       #94A3B8;   /* Timestamps, disabled */
+
+    /* ── Status colours (badge use only) ────────────────── */
+    --status-active:     #0D9488;   /* Civic Teal */
+    --status-pending:    #D97706;   /* Amber */
+    --status-flagged:    #E11D48;   /* Rose */
+    --status-inactive:   #64748B;   /* Slate Light */
+
+    /* Legacy aliases kept for gradual migration */
+    --navy:              #0F172A;
+    --navy-muted:        #1e293b;
+    --navy-border:       #334155;
+    --console-border:    rgba(15, 23, 42, 0.10);
+
+    /* ── Tailwind HSL aliases ────────────────────────────── */
+    --background:           212 13% 95%;   /* #F0F2F4 */
+    --foreground:           222 47% 11%;   /* #0F172A */
+    --card:                 0 0% 100%;
     --card-foreground:      222 47% 11%;
-    --popover:              0 0% 99.5%;
+    --popover:              0 0% 100%;
     --popover-foreground:   222 47% 11%;
-    --primary:              232 80% 57%;
-    --primary-foreground:   210 40% 98%;
-    --secondary:            210 38% 96%;
+    --primary:              174 84% 40%;   /* Civic Teal */
+    --primary-foreground:   0 0% 100%;
+    --secondary:            210 16% 90%;
     --secondary-foreground: 222 47% 11%;
-    --muted:                210 38% 96%;
+    --muted:                210 16% 90%;
     --muted-foreground:     215 16% 47%;
-    --accent:               210 38% 96%;
-    --accent-foreground:    222 47% 11%;
-    --destructive:          0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
+    --accent:               174 84% 40%;
+    --accent-foreground:    0 0% 100%;
+    --destructive:          347 84% 50%;   /* Rose */
+    --destructive-foreground: 0 0% 100%;
     --border:               214 30% 91%;
     --input:                214 30% 91%;
-    --ring:                 232 80% 57%;
-    --radius:               10px;
+    --ring:                 174 84% 40%;   /* Civic Teal */
+    --radius:               8px;
   }
 }
 
@@ -63,94 +76,55 @@
   }
 
   body {
-    @apply bg-background text-foreground;
-    font-family: 'Inter', system-ui, sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 300;
+    background-color: var(--canvas);
+    color: var(--slate);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
-    font-weight: 700;
-    line-height: 1.25;
+    font-family: 'Sora', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    color: var(--slate);
   }
 
-  /* Anchor base */
-  a {
-    color: inherit;
-    text-decoration: none;
-  }
-
-  /* Focus visible — keyboard only */
-  :focus-visible {
-    outline: 2px solid var(--ops-blue);
-    outline-offset: 2px;
-    border-radius: 4px;
-  }
-
-  :focus:not(:focus-visible) {
-    outline: none;
-  }
-
-  /* Selection */
-  ::selection {
-    background-color: oklch(52% 0.22 260 / 0.18);
-    color: inherit;
-  }
-
-  /* Scrollbar — canvas area */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb {
-    background: oklch(80% 0.01 250);
-    border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: oklch(68% 0.015 250);
+  code, pre, kbd, samp {
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
   }
 }
 
 /* ─── Utility Classes ────────────────────────────────────────────────────── */
 @layer utilities {
-  /* Typography */
+
+  /* ── Typography ──────────────────────────────────────── */
   .font-display {
-    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    font-family: 'Sora', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
   }
 
-  /* Transition helpers — scope to interactive only */
-  .transition-base {
-    transition: color 150ms ease-out,
-                background-color 150ms ease-out,
-                border-color 150ms ease-out,
-                box-shadow 150ms ease-out,
-                opacity 150ms ease-out;
+  .font-body {
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   }
 
-  /* Elevation — border-first, shadow on hover only */
-  .card-base {
-    background: var(--canvas-raised);
-    border: 1px solid var(--console-border);
-    border-radius: 16px;
-    padding: 24px;
+  .font-mono-brand {
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
   }
 
-  /* Sidebar nav item */
+  /* ── Sidebar nav item styling ────────────────────────── */
   .nav-item {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 8px 12px;
-    border-radius: 8px;
+    border-radius: 6px;
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
     font-size: 13.5px;
-    font-weight: 500;
+    font-weight: 400;
     color: oklch(75% 0.015 240);
     transition-property: background-color, color;
-    transition-duration: 150ms;
+    transition-duration: 200ms;
     transition-timing-function: ease-out;
     cursor: pointer;
     text-decoration: none;
@@ -162,174 +136,195 @@
   }
 
   .nav-item.active {
-    background-color: oklch(100% 0 0 / 0.1);
-    color: oklch(98% 0.006 240);
+    background-color: rgba(13, 148, 136, 0.15);
+    color: #ccfbf1;
   }
 
   .nav-item.active svg {
-    color: oklch(68% 0.22 260);
+    color: #2dd4bf;
   }
 
-  /* Status badge base */
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: 99px;
-    font-size: 11.5px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-  }
-
-  /* Table */
-  .data-table th {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--slate-muted);
-    padding: 10px 16px;
-    background: hsl(var(--muted));
-    border-bottom: 1px solid var(--console-border);
-    white-space: nowrap;
-  }
-
-  .data-table td {
-    padding: 11px 16px;
-    border-bottom: 1px solid oklch(93% 0.01 250);
-    font-size: 13.5px;
-    vertical-align: middle;
-  }
-
-  .data-table tr:last-child td {
-    border-bottom: none;
-  }
-
-  .data-table tr:hover td {
-    background-color: oklch(97.5% 0.007 240);
-  }
-
-  /* Primary button */
+  /* ── Buttons ─────────────────────────────────────────── */
   .btn-primary {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 9px 18px;
-    background: var(--ops-blue);
-    color: oklch(98.5% 0.006 240);
-    border: none;
-    border-radius: 10px;
+    background-color: var(--civic-teal);
+    color: #ffffff;
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 500;
     font-size: 13.5px;
-    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: var(--radius);
+    border: none;
     cursor: pointer;
-    transition: background-color 150ms ease-out, box-shadow 150ms ease-out;
+    text-decoration: none;
+    transition: background-color 200ms ease-out;
     white-space: nowrap;
   }
 
   .btn-primary:hover {
-    background: var(--ops-blue-hover);
-    box-shadow: 0 4px 12px oklch(52% 0.22 260 / 0.25);
+    background-color: var(--civic-teal-hover);
   }
 
-  .btn-primary:active {
-    background: var(--ops-blue-hover);
-    box-shadow: none;
+  .btn-primary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
   }
 
-  /* Ghost button */
-  .btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    background: transparent;
-    color: var(--slate-muted);
-    border: 1px solid var(--console-border);
-    border-radius: 10px;
-    font-size: 13.5px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: color 150ms ease-out, border-color 150ms ease-out, background-color 150ms ease-out;
-    white-space: nowrap;
-  }
-
-  .btn-ghost:hover {
-    color: oklch(19% 0.03 260);
-    border-color: oklch(80% 0.01 250);
-    background: oklch(97% 0.006 240);
-  }
-
-  /* Input */
+  /* ── Inputs ──────────────────────────────────────────── */
   .input-base {
+    display: block;
     width: 100%;
-    padding: 9px 14px;
+    padding: 9px 12px;
     background: var(--canvas-raised);
-    border: 1px solid var(--console-border);
-    border-radius: 10px;
-    font-size: 13.5px;
-    color: oklch(19% 0.03 260);
+    border: 1px solid var(--seam);
+    border-radius: var(--radius);
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--slate);
     outline: none;
-    transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
-    font-family: 'Inter', sans-serif;
+    transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
   }
 
   .input-base::placeholder {
-    color: var(--slate-muted);
+    color: var(--slate-faint);
   }
 
   .input-base:focus {
-    border-color: var(--ops-blue);
-    box-shadow: 0 0 0 3px oklch(52% 0.22 260 / 0.12);
+    border-color: var(--civic-teal);
+    box-shadow: 0 0 0 3px var(--teal-wash);
   }
 
-  /* Select */
+  .input-base:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
   .select-base {
-    appearance: none;
-    padding: 9px 32px 9px 14px;
-    background: var(--canvas-raised) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;
-    border: 1px solid var(--console-border);
-    border-radius: 10px;
-    font-size: 13.5px;
-    color: oklch(19% 0.03 260);
-    font-family: 'Inter', sans-serif;
-    cursor: pointer;
+    display: block;
+    padding: 8px 32px 8px 12px;
+    background: var(--canvas-raised);
+    border: 1px solid var(--seam);
+    border-radius: var(--radius);
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--slate);
     outline: none;
-    transition: border-color 150ms ease-out;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='square' stroke-linejoin='miter'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: border-color 200ms ease-out;
   }
 
   .select-base:focus {
-    border-color: var(--ops-blue);
-    box-shadow: 0 0 0 3px oklch(52% 0.22 260 / 0.12);
+    border-color: var(--civic-teal);
+    box-shadow: 0 0 0 3px var(--teal-wash);
   }
 
-  /* Page layout */
-  .page-content {
-    padding: 32px 40px;
-    max-width: 1400px;
+  /* ── Status badges ───────────────────────────────────── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
 
-  /* Stat row */
-  .stat-value {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 28px;
-    font-weight: 800;
-    line-height: 1;
-    color: oklch(19% 0.03 260);
-    letter-spacing: -0.02em;
+  /* ── Data table ──────────────────────────────────────── */
+  .data-table {
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    border-collapse: collapse;
+    width: 100%;
   }
 
-  .stat-label {
-    font-size: 11px;
-    font-weight: 600;
+  .data-table thead tr {
+    background: var(--mist);
+  }
+
+  .data-table th {
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px;
+    font-weight: 500;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--slate-muted);
-    margin-top: 4px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--seam);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--seam);
+    color: var(--slate-mid);
+    vertical-align: middle;
+  }
+
+  .data-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--teal-wash);
+    transition: background-color 150ms ease-out;
+  }
+
+  /* ── Page content area ───────────────────────────────── */
+  .page-content {
+    background: var(--canvas);
+    min-height: 100vh;
+  }
+
+  /* ── Stat labels / values ────────────────────────────── */
+  .stat-label {
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--slate-muted);
+  }
+
+  .stat-value {
+    font-family: 'Sora', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    color: var(--slate);
+  }
+
+  /* ── Transition helper ───────────────────────────────── */
+  .transition-base {
+    transition: box-shadow 200ms ease-out, border-color 200ms ease-out;
+  }
+
+  .transition-base:hover {
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  }
+
+  /* ── Spinner ─────────────────────────────────────────── */
+  .animate-spin-slow {
+    animation: spin 1.2s linear infinite;
   }
 }
 
-/* ─── Keyframes ──────────────────────────────────────────────────────────── */
+/* ─── Keyframe Animations ────────────────────────────────────────────────── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -340,19 +335,14 @@
   to   { opacity: 1; transform: translateX(0); }
 }
 
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+/* Modal entry — 0.2s ease-out from slight scale */
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1.0); }
 }
 
-.animate-fade-in  { animation: fade-in  0.2s ease-out; }
-.animate-slide-in { animation: slide-in 0.2s ease-out; }
-.animate-spin-slow { animation: spin-slow 1.2s linear infinite; }
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-fade-in,
-  .animate-slide-in,
-  .animate-spin-slow {
-    animation: none;
-  }
+/* ─── Text selection ─────────────────────────────────────────────────────── */
+::selection {
+  background-color: var(--teal-tint);
+  color: inherit;
 }
