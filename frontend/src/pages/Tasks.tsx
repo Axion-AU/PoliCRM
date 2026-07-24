@@ -75,10 +75,6 @@ export default function Tasks() {
   const [createPersonId, setCreatePersonId] = useState("");
   const [createAssignee, setCreateAssignee] = useState("");
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString();
-
   /* ─── Data fetching ────────────────────────────────────────────────── */
   const fetchToday = async () => {
     try {

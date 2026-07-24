@@ -3,13 +3,8 @@ import {
   MessageSquare,
   Send,
   Users,
-  BarChart3,
   AlertCircle,
   CheckCircle2,
-  Clock,
-  XCircle,
-  Loader2,
-  Smartphone,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { smsApi, type SmsMessage } from "../services/api";

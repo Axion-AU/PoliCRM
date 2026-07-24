@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, RotateCw, RefreshCw } from "lucide-react";
+import { Plus, RotateCw } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { membershipsApi, type MembershipTier, type Membership } from "../services/api";
 

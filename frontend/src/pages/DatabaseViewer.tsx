@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { Database, Table2, RefreshCw, Play, ChevronLeft, ChevronRight, Search } from "lucide-react";
-import { $idToken } from "../stores/authStore";
+const TOKEN_KEY = "policrm_auth_token";
+function getToken(): string | null {
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+}
 
 interface TableInfo {
   name: string;
@@ -17,7 +20,7 @@ interface DatabaseStats {
 const API_BASE = "/api/db";
 
 async function apiCall<T>(endpoint: string): Promise<T> {
-  const token = $idToken.get();
+  const token = getToken();
   const res = await fetch(`${API_BASE}${endpoint}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -71,7 +74,7 @@ export function DatabaseViewer() {
     setQueryError(null);
     setLoading(true);
     try {
-      const token = $idToken.get();
+      const token = getToken();
       const res = await fetch(`${API_BASE}/query?sql=${encodeURIComponent(query)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
