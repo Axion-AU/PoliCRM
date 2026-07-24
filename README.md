@@ -1,235 +1,311 @@
-# AEC Checker
+<p align="center">
+  <img src="https://axionventures.com.au/images/policrm-banner-transparent.png" alt="PoliCRM" width="600" />
+</p>
 
-This program automates the verification of voter enrollment details by iterating through a CSV file of members and submitting their details to the [AEC website](https://check.aec.gov.au/).
+<p align="center">
+  <strong>Member management built for people trying to win.</strong>
+</p>
+
+<p align="center">
+  Automated AEC enrollment verification and member CRM for Australian political campaigns.<br/>
+  An <a href="https://axionventures.com.au">Axion Ventures</a> project.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.x-0D9488?style=flat-square&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/selenium-firefox-0D9488?style=flat-square&logo=selenium&logoColor=white" />
+  <img src="https://img.shields.io/badge/status-active-0D9488?style=flat-square" />
+</p>
+
+---
+
+## What it does
+
+PoliCRM verifies member enrollment against the Australian Electoral Roll and manages member records across a campaign. It supports two verification methods:
+
+- **Electoral Roll Access (ERA):** Upload your party's AEC-issued ERA `.txt` file. PoliCRM processes it into the local database and matches members directly against the roll, no scraping, no rate limits, no CAPTCHAs. This is the recommended path.
+- **AEC website automation:** Automates manual lookups against [check.aec.gov.au](https://check.aec.gov.au/) via Selenium. See [the note on AEC automation](#aec-website-automation) before using this.
+
+Two interfaces: a **terminal TUI** for scripted runs and a **web CRM** for day-to-day member management.
+
+---
 
 ## Prerequisites
 
-- **Python 3.x**: Ensure you have Python installed.
-- **Firefox Browser**: This tool uses Selenium with Firefox. Please ensure Firefox is installed on your system.
+- Python 3.x
+- Firefox (Selenium uses Firefox to better mimic human browsing behaviour)
+
+---
 
 ## Installation
 
-1.  Clone the repository:
+```bash
+git clone <repository-url>
+cd AEC_Checker
 
-    ```bash
-    git clone <repository-url>
-    cd AEC_Checker
-    ```
+python3 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-2.  Create and activate a virtual environment (recommended):
+pip install -r requirements.txt
+```
 
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
-    ```
-
-3.  Install the required Python packages:
-    ```bash
-    pip install -r requirements.txt
-    ```
+---
 
 ## Usage
 
-### Interactive Mode (Recommended)
+### Web CRM (recommended for most users)
 
-Simply run the script without arguments to launch the interactive Text User Interface (TUI):
-
-```bash
-python aec_checker.py
-```
-
-This will guide you through:
-
-1.  Selecting an input CSV file.
-2.  Optionally normalizing addresses (using `convert_addresses.py`).
-3.  Choosing validation mode (dry-run) to check data without performing AEC checks.
-4.  Configuring advanced options (retry attempts, delays between requests).
-5.  Running the AEC verification with progress tracking.
-6.  Creating filtered output files based on results.
-
-### Web CRM (Fusion Pilot)
-
-For a full graphical interface with member management, dashboard, and bulk tools:
+Full graphical interface with member management, dashboard, and bulk tools:
 
 ```bash
 ./run_crm.sh
 ```
 
-This will start the web server and open the dashboard at `http://localhost:8000`.
+Opens at `http://localhost:8000`.
 
-**Features:**
+| Feature | Description |
+|---------|-------------|
+| Dashboard | Real-time stats on verification progress |
+| Member Management | Add, edit, tag, and annotate members |
+| Import | Drag-and-drop CSV import with auto-verification |
+| AEC Verification | Automated background checks |
 
-- **Dashboard**: Real-time stats on verification progress.
-- **Member Management**: Add, edit, tag, and annotate members.
-- **Import**: Drag-and-drop CSV import with auto-verification.
-- **AEC Verification**: Automated background checks.
+---
 
-### Command Line Interface
+### Interactive TUI
 
-You can run the tools with command-line arguments for automation:
+Guided setup for one-off or first-time runs:
+
+```bash
+python aec_checker.py
+```
+
+Walks through: CSV selection, address normalisation, dry-run option, retry/delay config, progress tracking, and filtered output export.
+
+---
+
+### CLI
+
+For automation and scripted workflows:
 
 ```bash
 python aec_checker.py --infile input.csv --outfile output.csv --threads 2 --headless
 ```
 
-#### Enhanced Arguments
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--infile` | `input.csv` | Input CSV path |
+| `--outfile` | `output.csv` | Output CSV path |
+| `--skip` | `0` | Records to skip (resume interrupted runs) |
+| `--threads` | `1` | Concurrent browser threads (2–3 max recommended) |
+| `--headless` | off | Run without visible browser windows |
+| `--dry-run` | off | Validate input data without hitting AEC |
+| `--max-retries` | `3` | Retry attempts per record |
+| `--delay-min` | `1.5` | Minimum delay between requests (seconds) |
+| `--delay-max` | `3.0` | Maximum delay between requests (seconds) |
 
-- `--infile`: Path to the input CSV file (default: `input.csv`).
-- `--outfile`: Path to the output CSV file (default: `output.csv`).
-- `--skip`: Number of entries to skip (useful for resuming interrupted runs).
-- `--threads`: Number of concurrent browser threads (default: 1, recommend 2-3 max).
-- `--headless`: Run browsers in headless mode (no visible windows).
-- `--dry-run`: Validate input data without performing AEC checks.
-- `--max-retries`: Maximum retry attempts per record (default: 3).
-- `--delay-min`: Minimum delay between requests in seconds (default: 1.5).
-- `--delay-max`: Maximum delay between requests in seconds (default: 3.0).
+---
 
-### Example Workflows
+## Common workflows
 
-#### Validate Data Quality
-
+**Validate data quality before a run:**
 ```bash
 python aec_checker.py --infile members.csv --dry-run
 ```
 
-#### Production Run with Retries
-
+**Production run with conservative rate limiting:**
 ```bash
 python aec_checker.py --infile members.csv --outfile verified.csv \
   --threads 2 --headless --max-retries 5 --delay-min 2.0 --delay-max 4.0
 ```
 
-#### Resume Interrupted Job
-
+**Resume an interrupted job:**
 ```bash
 python aec_checker.py --infile members.csv --outfile verified.csv --skip 150
 ```
 
-#### 1. Prepare your Data (Optional)
+---
 
-Raw data often contains inconsistent address formats (e.g., "Street" vs "St", "Victoria" vs "VIC"). The `convert_addresses.py` utility helps normalize these to match AEC expectations.
+## Data format
+
+### Import (NationBuilder export format)
+
+The CSV importer expects NationBuilder's standard export columns:
+
+| Column | Description |
+|--------|-------------|
+| `first_name` | |
+| `middle_name` | |
+| `last_name` | |
+| `nationbuilder_id` | Mapped to `external_identities` on import |
+| `primary_address1` | Street address |
+| `primary_address2` | Optional |
+| `primary_address3` | Optional |
+| `primary_city` | Suburb |
+| `primary_state` | State abbreviation (e.g. `VIC`, `NSW`) |
+| `primary_zip` | Postcode |
+| `primary_country_code` | Defaults to `AU` |
+
+### Verification output columns
+
+| Column | Description |
+|--------|-------------|
+| `nationbuilder_link` | Link to member profile |
+| `AEC_result` | `Pass`, `Partial`, `Fail`, `Fail_Street`, `Fail_Suburb` |
+| `federal_division` | Federal electorate |
+| `state_division` | State electorate |
+| `local_government` | LGA |
+| `local_ward` | Ward |
+
+---
+
+## Database schema
+
+The Rust rewrite stores all person records in SQLite with AES-256-GCM encryption on PII fields. The full migration is in `migrations/0001_initial_schema.sql`.
+
+### Encryption model
+
+PII fields (names, email, phone, address lines, city) are encrypted at rest as AES-256-GCM ciphertext encoded in base64. Only the fields needed for filtering and search are stored in plaintext:
+
+| Field | Storage | Reason |
+|-------|---------|--------|
+| `primary_state` | Plaintext | Geographic filtering |
+| `primary_zip` | Plaintext | Low sensitivity, filtering |
+| `email_blind_index` | Plaintext | `SHA-256(email + pepper)` — searchable without decrypting email |
+| Everything else | Encrypted | Name, address, phone, mobile, city |
+
+The blind index lets you look up a person by email without ever storing the email in a queryable form. The pepper is application-controlled and not stored in the database.
+
+### Core tables
+
+**`persons`** — one row per individual. PII columns encrypted as above.
+
+**`external_identities`** — maps a person to IDs in external systems (NationBuilder, etc.). Keyed on `(provider, provider_id)`.
+
+**`parties`** — party and branch hierarchy. Self-referential via `parent_id` for nested structures (e.g. a branch under a state division under the national party).
+
+**`memberships`** — links a person to a party with status, type, and lifecycle dates (`join_date`, `renewal_date`, `resignation_date`). Soft-deleted via `deleted_at`.
+
+**`interactions`** — append-only log of contact events. `interaction_type` is a string enum; `metadata` is freeform JSON for type-specific fields.
+
+### Soft deletes
+
+`persons` and `memberships` use `deleted_at` rather than hard deletes. Electoral compliance contexts often require retaining records; check your party's data retention obligations before purging rows.
+
+---
+
+## Address normalisation
+
+Raw exports often have inconsistent address formats (`Street` vs `St`, `Victoria` vs `VIC`). Normalise before running:
 
 ```bash
 python src/utils/convert_addresses.py <input.csv> <output.csv>
 ```
 
-- **Input**: A CSV file (e.g., exported from NationBuilder).
-- **Output**: A new CSV file with normalized `primary_address1` and `primary_state` columns. The original address is preserved in an `origAddress` column.
+Normalises `primary_address1` and `primary_state` to match AEC expectations. Original address is preserved in `origAddress`.
 
-### 2. Run the Checker
+---
 
-Run the main script to verify enrollments:
+## Electoral Roll Access (ERA)
 
-```bash
-python aec_checker.py --infile <input_file.csv> --outfile <output_file.csv>
+ERA is a direct feed of the Australian electoral roll, issued by the AEC to registered political parties under strict access conditions. It's significantly faster and more reliable than web scraping.
+
+> **Important:** PoliCRM processes ERA files but does not distribute them. The roll is managed by your party's designated ERA custodian in accordance with AEC access requirements. If you don't have an ERA file, contact your party's state or national secretary.
+
+### Uploading an ERA file
+
+In the web CRM, navigate to **Settings → Electoral Roll → Import ERA File** and upload your `.txt` file. PoliCRM will:
+
+1. Parse the ERA format into the local database
+2. Match existing member records against the roll
+3. Flag discrepancies (name mismatches, address changes, unenrolled members)
+4. Surface electorate data (federal division, state division, LGA, ward) without a live AEC lookup
+
+ERA data is stored locally. It never leaves the machine running PoliCRM.
+
+### ERA vs AEC automation
+
+| | ERA | AEC automation |
+|--|-----|-------------|
+| Speed | Fast (local lookup) | Slow (1–3s per record) |
+| Rate limits | None | Yes, strict |
+| CAPTCHA risk | None | Present |
+| Requires AEC access agreement | Yes | No |
+| Data freshness | As of roll extract date | Live |
+| Compliance position | Sanctioned | Gray area |
+
+Use ERA when available. The automation method exists as a fallback but carries compliance risk; read the section below before using it.
+
+---
+
+## AEC Website Automation
+
+> **Note:** Automating the AEC's enrollment checker is a gray area. The tool replicates what a party volunteer would do manually, but the AEC's site includes bot detection, which implies automated access is not intended. Use this method only if your party does not hold current ERA access, and assess your own compliance position before running it at scale.
+
+The scraping method uses Selenium with Firefox to submit member details to [check.aec.gov.au](https://check.aec.gov.au/) and extract the result. It works, but it's slower, subject to rate limiting and CAPTCHAs, and sits outside the AEC's sanctioned access paths.
+
+**If your party holds ERA access, use that instead.**
+
+---
+
+## Troubleshooting (AEC automation)
+
+**"Unable to validate, if you are using VPN software..."**
+
+The AEC site has anti-bot protections. Disable any VPN, keep Firefox up to date, and use conservative delays (`--delay-min 2.0 --delay-max 4.0`).
+
+**CAPTCHA challenges**
+
+Increase delays and reduce threads to `--threads 1`. The script detects CAPTCHAs and pauses automatically. Check `aec_checker.log` for warnings.
+
+**Browser crashes**
+
+The script auto-recovers crashed browser threads and saves progress after each record. Check logs for repeated crash patterns.
+
+**"Element click intercepted" / selection errors**
+
+Run address normalisation first. The AEC site's dropdowns are sensitive to address format. See `aec_checker.log` for specific errors.
+
+---
+
+## Project structure
+
+```
+aec_checker.py          Entry point
+src/
+  aec_core/
+    browser.py          Selenium automation
+    models.py           Data models and constants
+    utils.py            Helper functions
+  utils/
+    convert_addresses.py  Address normalisation
 ```
 
-#### Arguments
+---
 
-- `--infile`: Path to the input CSV file (default: `input.csv`).
-- `--outfile`: Path to the output CSV file (default: `output.csv`).
-- `--skip`: Number of entries to skip (useful for resuming interrupted runs).
+## Changelog
 
-#### Input CSV Format
+**Rust rewrite (current)**
+- Full rewrite in Rust
+- SQLite database with AES-256-GCM encryption on all PII fields
+- Blind index for email search without plaintext storage
+- Normalised schema: persons, memberships, parties, interactions, external identities
+- Soft deletes on persons and memberships
 
-The input CSV file is expected to have the following columns (standard NationBuilder export format):
+**Python (legacy)**
 
-- `first_name`
-- `middle_name`
-- `last_name`
-- `nationbuilder_id`
-- `primary_address1` (Street address)
-- `primary_address2` (Optional)
-- `primary_address3` (Optional)
-- `primary_city` (Suburb)
-- `primary_state` (State abbreviation, e.g., VIC, NSW)
-- `primary_zip` (Postcode)
-- `primary_country_code`
-
-#### Output CSV Format
-
-The output file will contain the original member details plus:
-
-- `nationbuilder_link`: Link to the member's profile.
-- `AEC_result`: Result of the check (`Pass`, `Partial`, `Fail`, `Fail_Street`, `Fail_Suburb`).
-- `federal_division`: The federal electorate found.
-- `state_division`: The state electorate found.
-- `local_government`: The local government area.
-- `local_ward`: The local ward.
-
-## Troubleshooting
-
-### "Unable to validate, if you are using VPN software..."
-
-The AEC website has strict anti-bot protections. If you see this error or if the script fails to verify valid details:
-
-1.  **Disable VPNs**: Ensure you are not connected to a VPN.
-2.  **Browser**: The script is configured to use Firefox to better mimic human behavior. Ensure Firefox is up to date.
-3.  **Rate Limiting**: If you run the script too fast or for too many records, you might be temporarily blocked.
-    - Use `--delay-min 2.0 --delay-max 4.0` for more conservative timing
-    - Reduce thread count to 1-2 with `--threads 2`
-    - The script includes automatic retry logic to handle transient issues
-
-### CAPTCHA Challenges
-
-If you encounter CAPTCHA challenges:
-
-1.  **Increase delays**: Use longer delays between requests (e.g., `--delay-min 3.0 --delay-max 5.0`)
-2.  **Reduce threads**: Use `--threads 1` to minimize detection
-3.  **Monitor logs**: Check `aec_checker.log` for CAPTCHA warnings
-4.  **Manual intervention**: The script will detect CAPTCHAs and pause with longer delays
-
-### Browser Crashes
-
-The script now includes automatic browser recovery:
-
-- If a browser crashes, the thread will automatically restart it
-- Progress is saved after each record, so no work is lost
-- Check logs for repeated crash patterns which may indicate system issues
-
-### "Element click intercepted" or Selection Errors
-
-The script interacts with complex dropdowns on the AEC site. If it fails to select a street or suburb:
-
-- Use the address normalization feature: `--normalize` or select it in TUI
-- Check the `convert_addresses.py` output to ensure the address format matches AEC expectations
-- The script now includes retry logic to handle transient UI issues
-- Review `aec_checker.log` for specific error details
-
-### Invalid Input Data
-
-Use validation mode to check data quality before running:
-
-```bash
-python aec_checker.py --infile members.csv --dry-run
-```
-
-This will report:
-
-- Missing required fields
-- Invalid postcodes
-- Missing addresses
-- Other data quality issues
-
-## New Features
-
-See `IMPROVEMENTS.md` for detailed documentation of recent enhancements:
-
+See `IMPROVEMENTS.md` for the full Python-era changelog. Summary:
 - Retry logic with exponential backoff
 - Configurable rate limiting
 - Input validation and dry-run mode
 - Enhanced result extraction (actual electoral divisions)
 - Browser crash recovery
 - CAPTCHA detection
-- Improved logging and error handling
 
-## Project Structure
+---
 
-- `aec_checker.py`: Entry point for the checker.
-- `src/`: Source code.
-  - `aec_core/`: Core logic package.
-    - `browser.py`: Selenium automation logic.
-    - `models.py`: Data models and constants.
-    - `utils.py`: Helper functions.
-  - `utils/`: Utility scripts.
-    - `convert_addresses.py`: Address normalization logic.
+<p align="center">
+  <a href="https://axionventures.com.au">
+    <img src="https://axionventures.com.au/images/policrm-logo-transparent.png" alt="An Axion Ventures project" height="32" />
+  </a>
+</p>
